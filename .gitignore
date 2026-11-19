@@ -1,0 +1,44 @@
+
+# Dependencies
+node_modules/
+
+# Next.js
+.next/
+out/
+coverage/
+next-env.d.ts
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Vercel
+.vercel/
+
+# Firebase
+.firebase/
+.firebaserc
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Firebase credentials
+service-account*.json
+*-adminsdk-*.json
+*service-account*.json
+
+# Private keys
+*.pem
+*.key
+
+# OS files
+.DS_Store
+Thumbs.db

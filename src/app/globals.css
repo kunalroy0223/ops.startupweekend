@@ -1,0 +1,355 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Inhub Workspace design tokens  ·  docs/design-system.md is the source of truth.
+
+   Official brand values (Brand Kit "Color Palette 1–4"):
+     #39C463 green · #000000 black · #FFFFFF white · #8298AB slate
+   Official logo values (sampled from inhub-ecell.png):
+     #103048 Inhub navy · #0090D8 Inhub cyan
+   Every other value below is DERIVED from these for contrast or state, and
+   is documented with its contrast ratio in the design system.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+:root {
+  /* brand primitives */
+  --brand-green: #39c463;
+  --brand-black: #000000;
+  --brand-white: #ffffff;
+  --brand-slate: #8298ab;
+  --brand-navy: #103048;
+  --brand-cyan: #0090d8;
+
+  /* semantic: light theme */
+  --canvas: #f4f6f3;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-muted: #eef1ec;
+  --surface-inverse: #000000;
+  --text-primary: #000000;
+  --text-secondary: #4d6070;
+  --text-tertiary: #5d6f7e;
+  --text-inverse: #ffffff;
+  --border: #d9ded7;
+  --border-strong: #000000;
+  --shadow-ink: #000000;
+  --accent: #39c463;
+  --accent-on: #000000;
+  --accent-text: #167236;
+  --accent-soft: #dcf5e3;
+  --slate-soft: #e4eaef;
+  --info: #00699e;
+  --info-soft: #ddeffa;
+  --success: #167236;
+  --success-soft: #dcf5e3;
+  --warning: #8a5300;
+  --warning-soft: #fcefd6;
+  --danger: #b3261e;
+  --danger-soft: #fbe3e1;
+  --focus: #0090d8;
+  --dot: rgb(0 0 0 / 0.11);
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --canvas: #0b0d0c;
+    --surface: #121514;
+    --surface-raised: #1a1e1c;
+    --surface-muted: #1f2421;
+    --surface-inverse: #ffffff;
+    --text-primary: #ffffff;
+    --text-secondary: #a9b9c7;
+    --text-tertiary: #8298ab;
+    --text-inverse: #000000;
+    --border: #2a302d;
+    --border-strong: #e8ece9;
+    --shadow-ink: #39c463;
+    --accent-text: #5fe08a;
+    --accent-soft: #173a22;
+    --slate-soft: #222c35;
+    --info: #5fb8f0;
+    --info-soft: #10283a;
+    --success: #5fe08a;
+    --success-soft: #173a22;
+    --warning: #f2b35b;
+    --warning-soft: #3a2a10;
+    --danger: #ff8a80;
+    --danger-soft: #3d1715;
+    --focus: #5fb8f0;
+    --dot: rgb(255 255 255 / 0.09);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --canvas: #0b0d0c;
+  --surface: #121514;
+  --surface-raised: #1a1e1c;
+  --surface-muted: #1f2421;
+  --surface-inverse: #ffffff;
+  --text-primary: #ffffff;
+  --text-secondary: #a9b9c7;
+  --text-tertiary: #8298ab;
+  --text-inverse: #000000;
+  --border: #2a302d;
+  --border-strong: #e8ece9;
+  --shadow-ink: #39c463;
+  --accent-text: #5fe08a;
+  --accent-soft: #173a22;
+  --slate-soft: #222c35;
+  --info: #5fb8f0;
+  --info-soft: #10283a;
+  --success: #5fe08a;
+  --success-soft: #173a22;
+  --warning: #f2b35b;
+  --warning-soft: #3a2a10;
+  --danger: #ff8a80;
+  --danger-soft: #3d1715;
+  --focus: #5fb8f0;
+  --dot: rgb(255 255 255 / 0.09);
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--surface-raised);
+  --color-muted: var(--surface-muted);
+  --color-inverse: var(--surface-inverse);
+  --color-fg: var(--text-primary);
+  --color-fg-2: var(--text-secondary);
+  --color-fg-3: var(--text-tertiary);
+  --color-fg-inverse: var(--text-inverse);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-accent: var(--accent);
+  --color-accent-on: var(--accent-on);
+  --color-accent-text: var(--accent-text);
+  --color-accent-soft: var(--accent-soft);
+  --color-slate: var(--brand-slate);
+  --color-ink: var(--brand-black);
+  --color-slate-soft: var(--slate-soft);
+  --color-navy: var(--brand-navy);
+  --color-cyan: var(--brand-cyan);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-archivo), "Arial Black", ui-sans-serif, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius-control: 8px;
+  --radius-panel: 12px;
+  --radius-feature: 18px;
+
+  --shadow-hard-sm: 2px 2px 0 0 var(--shadow-ink);
+  --shadow-hard: 4px 4px 0 0 var(--shadow-ink);
+  --shadow-hard-lg: 6px 6px 0 0 var(--shadow-ink);
+  --shadow-float: 0 12px 32px -12px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.08);
+
+  --ease-snap: cubic-bezier(0.2, 0.9, 0.3, 1.2);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@layer base {
+  html {
+    background: var(--canvas);
+    color: var(--text-primary);
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.5;
+    background: var(--canvas);
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    background: var(--accent);
+    color: var(--accent-on);
+  }
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  dialog::backdrop {
+    background: rgb(0 0 0 / 0.45);
+    animation: backdrop-in 240ms var(--ease-out);
+  }
+  /* Lenis smooth scrolling (recommended base styles). */
+  html.lenis, html.lenis body {
+    height: auto;
+  }
+  .lenis.lenis-smooth {
+    scroll-behavior: auto !important;
+  }
+  .lenis.lenis-smooth [data-lenis-prevent] {
+    overscroll-behavior: contain;
+  }
+  .lenis.lenis-stopped {
+    overflow: clip;
+  }
+}
+
+@layer components {
+  /* Display type: Archivo at 125% width, the wide heavy grotesk of design.webp. */
+  .display {
+    font-family: var(--font-display);
+    font-stretch: 125%;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+  }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.4;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  /* Signature motif 1: the highlighted word box ("Meet the [Makers]"). */
+  .hl {
+    display: inline-block;
+    padding: 0.02em 0.2em 0.06em;
+    margin: 0 0.04em;
+    background: var(--accent);
+    color: var(--accent-on);
+    border: 2px solid var(--brand-black);
+    box-shadow: 3px 3px 0 0 var(--brand-black);
+    transform: rotate(-1.2deg);
+  }
+  .hl-slate {
+    background: var(--slate-soft);
+    color: var(--text-primary);
+  }
+
+  /* Signature motif 2: the tilted sticker label ("The Internet Has Spoken"). */
+  .sticker {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border: 1.5px solid var(--border-strong);
+    border-radius: 999px;
+    background: var(--surface);
+    box-shadow: var(--shadow-hard-sm);
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    transform: rotate(-3deg);
+    white-space: nowrap;
+  }
+
+  /* Signature motif 3: the dotted canvas. Identity surfaces only, never behind tables. */
+  .dotgrid {
+    background-image: radial-gradient(var(--dot) 1px, transparent 1.2px);
+    background-size: 18px 18px;
+  }
+
+  /* Signature motif 4: the inked panel with a hard offset shadow. Use selectively. */
+  .inked {
+    border: 2px solid var(--border-strong);
+    box-shadow: var(--shadow-hard);
+  }
+
+  /* Tactile press used by primary controls. */
+  .press {
+    transition: transform 120ms var(--ease-out), box-shadow 120ms var(--ease-out);
+  }
+  .press:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+  }
+  .press:active:not(:disabled) {
+    transform: translate(2px, 2px);
+    box-shadow: 0 0 0 0 var(--shadow-ink);
+  }
+
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Inked icon tile: used beside page titles and on empty states. */
+  .icon-tile {
+    place-items: center;
+    border: 2px solid var(--border-strong);
+    border-radius: 10px;
+    background: var(--accent);
+    color: var(--accent-on);
+    box-shadow: var(--shadow-hard-sm);
+  }
+
+  /* Icon nudges on hover for buttons and links that carry one. */
+  .nudge svg {
+    transition: transform 200ms var(--ease-snap);
+  }
+  .nudge:hover svg:last-child {
+    transform: translateX(2px);
+  }
+  .nudge:hover svg:first-child {
+    transform: scale(1.12) rotate(-6deg);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .press:hover:not(:disabled), .press:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Bars that grow in from the left (role mix, progress). */
+.grow-x {
+  transform-origin: left;
+  animation: grow-x 900ms var(--ease-out) both 300ms;
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Table rows rise in one after another on first paint. */
+tbody > tr {
+  animation: row-in 420ms var(--ease-out) both;
+}
+tbody > tr:nth-child(2) { animation-delay: 30ms; }
+tbody > tr:nth-child(3) { animation-delay: 60ms; }
+tbody > tr:nth-child(4) { animation-delay: 90ms; }
+tbody > tr:nth-child(5) { animation-delay: 120ms; }
+tbody > tr:nth-child(6) { animation-delay: 150ms; }
+tbody > tr:nth-child(n + 7) { animation-delay: 180ms; }
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}

@@ -1,0 +1,76 @@
+rules_version = '2';
+
+// Inhub Workspace: Firestore Security Rules
+//
+// Architecture: every write goes through trusted server code (Next.js route
+// handlers using the Admin SDK, which bypasses these rules and therefore runs
+// its own authorization via src/domain/authz.ts). These rules are the
+// defence-in-depth layer for any direct client access: default deny, no
+// client writes at all, and narrowly scoped reads.
+// Keep in sync with docs/rbac-matrix.md and tests/rules/firestore.rules.test.ts.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function profilePath() { return /databases/$(database)/documents/users/$(uid()); }
+    function profile() { return get(profilePath()).data; }
+    function isActive() { return signedIn() && exists(profilePath()) && profile().status == 'active'; }
+    function isAdmin() { return isActive() && profile().role == 'admin'; }
+
+    // Deterministic membership IDs: `${scopeId}_${userId}` (database-schema.md §4.7).
+    function activeIn(coll, scopeId) {
+      let path = /databases/$(database)/documents/$(coll)/$(scopeId + '_' + uid());
+      return exists(path) && get(path).data.status == 'active';
+    }
+
+    match /organizations/{orgId} {
+      allow read: if isActive();
+    }
+
+    match /workspaces/{id} {
+      allow read: if isActive();
+    }
+
+    match /users/{userId} {
+      // Directory reads beyond your own profile are served by the server,
+      // which applies the team/workstream scope rules.
+      allow read: if isAdmin() || (signedIn() && userId == uid());
+    }
+
+    match /workstreams/{id} {
+      allow read: if isAdmin() || (isActive() && activeIn('workstreamMemberships', id));
+    }
+
+    match /teams/{id} {
+      allow read: if isAdmin() || (isActive() && activeIn('teamMemberships', id));
+    }
+
+    match /teamMemberships/{id} {
+      allow read: if isAdmin() || (isActive() && (resource.data.userId == uid() || activeIn('teamMemberships', resource.data.teamId)));
+    }
+
+    match /workstreamMemberships/{id} {
+      allow read: if isAdmin() || (isActive() && (resource.data.userId == uid() || activeIn('workstreamMemberships', resource.data.workstreamId)));
+    }
+
+    match /workstreamTeams/{id} {
+      allow read: if isAdmin() || (isActive() && (activeIn('teamMemberships', resource.data.teamId) || activeIn('workstreamMemberships', resource.data.workstreamId)));
+    }
+
+    match /notifications/{id} {
+      allow read: if isActive() && resource.data.recipientUserId == uid();
+    }
+
+    match /notificationPreferences/{userId} {
+      allow read: if isActive() && userId == uid();
+    }
+
+    // invitations, auditLogs, domainEvents, emailDeliveries, webhookReceipts,
+    // rateLimits and anything not listed: server only.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
