@@ -19,6 +19,11 @@ export const COL = {
   auditLogs: "auditLogs",
   webhookReceipts: "webhookReceipts",
   rateLimits: "rateLimits",
+  projects: "projects",
+  tasks: "tasks",
+  taskComments: "taskComments",
+  taskActivity: "taskActivity",
+  workReports: "workReports",
 } as const;
 
 export const SCHEMA_VERSION = 1;

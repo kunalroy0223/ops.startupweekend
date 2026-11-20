@@ -40,7 +40,7 @@ const env = process.env;
 const orgId = env.ORGANIZATION_ID || "inhub";
 const emulators = env.USE_FIREBASE_EMULATORS === "true";
 if (emulators) {
-  env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8080";
+  env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8085";
   env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9099";
   initializeApp({ projectId: env.FIREBASE_PROJECT_ID || "demo-inhub" });
 } else {

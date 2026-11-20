@@ -332,7 +332,6 @@ Use subcollections for potentially unbounded data:
 
 - `tasks/{taskId}/comments/{commentId}`
 - `tasks/{taskId}/activity/{activityId}`
-- `tasks/{taskId}/attachments/{attachmentId}`
 - `tasks/{taskId}/participants/{userId}` (optional if collaborator arrays become large)
 
 Comment example:
@@ -383,7 +382,6 @@ interface WorkReportEntry {
   blockers?: string[];
   nextSteps?: string[];
   linkUrls?: string[];
-  attachmentIds?: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -495,25 +493,14 @@ interface AuditLog {
 
 Audit logs are written only by trusted server code. They are append-only for application users. Define retention, export and backup policy before production.
 
-### 4.21 `attachments/{attachmentId}`
+### 4.21 Document and reference links
 
-```ts
-interface Attachment {
-  organizationId: string;
-  workspaceId: string;
-  storagePath: string;
-  originalFileName: string;
-  contentType: string;
-  sizeBytes: number;
-  uploadedBy: string;
-  parentType: "task" | "work_report" | "user_profile";
-  parentId: string;
-  status: "pending_scan" | "available" | "rejected";
-  createdAt: Timestamp;
-}
-```
+Inhub Workspace stores external document references as validated HTTP(S) URLs on their parent Firestore records:
 
-Storage path access must be authorised against the parent resource. Do not expose public URLs by default.
+- `tasks/{taskId}.referenceLinks[]` — task specifications, shared documents and deliverables.
+- `workReports/{reportId}/entries/{entryId}.linkUrls[]` — documents and deliverables relevant to a work entry.
+
+The application stores link values only. Binary file contents, upload metadata and signed download URLs are not stored in Firestore. Files remain in an organisation-approved external document store, and its sharing permissions are managed by the file owner.
 
 ## 5. Index plan
 
@@ -549,7 +536,7 @@ The final index definitions must be generated from implemented queries and commi
 - Users cannot change `role`, `status`, membership assignments or Admin-only settings from the client.
 - Leads can read only assigned resource scopes.
 - Members can read only permitted work and team-shared resources.
-- Task comments and attachments inherit task access.
+- Task comments and document/reference links inherit task access.
 - Users can only create/update their own draft reports; submitted reports are immutable to the author until returned for revision.
 - Clients cannot write `auditLogs`, `domainEvents` processing state or `emailDeliveries`.
 - For server code using Firebase Admin SDK, explicitly call the authorization service because rules are bypassed.
@@ -571,7 +558,7 @@ Be mindful of Firestore transaction limits and document size. Use background pro
 - Deactivated users remain referenced by historical tasks, reports and audit logs.
 - Archived teams/workstreams/projects remain queryable for authorised historical views.
 - Deletion should be exceptional and governed by an explicit retention policy.
-- Set retention and cleanup policy for expired invitations, email delivery metadata, notifications, attachments and audit logs before production.
+- Set retention and cleanup policy for expired invitations, email delivery metadata, notifications and audit logs before production.
 - Back up production Firestore data and document recovery procedures.
 
 ## 9. Required files in the repository
@@ -613,7 +600,7 @@ Added (not in the draft):
 | `webhookReceipts/{provider_eventId}` | Deduplicates Resend webhook deliveries (created with `create()`, so a replay fails with ALREADY_EXISTS and is ignored). |
 | `rateLimits/{key}` | Server-side throttle for password-reset requests (no account enumeration, no mail bombing). |
 
-Not yet implemented (later modules): `projects`, `projectTeams`, `tasks`, `taskDependencies`, task subcollections, `workReports`, `attachments`.
+Not yet implemented (later modules): `projects`, `projectTeams`, `tasks`, `taskDependencies`, task subcollections and `workReports`.
 
 ### A.2 Field and ID decisions
 
@@ -638,3 +625,46 @@ Decisions 3, 4, 6 and 7 belong to Modules 2–3 and are still open.
 ### A.4 Indexes and rules
 
 `firestore.indexes.json` holds the 20 composite indexes Module 1 queries need. `firestore.rules` is default-deny, allows **no client writes at all** (every write goes through the server with the Admin SDK), and allows scoped reads only. 12 emulator rules tests cover it (`npm run test:rules`).
+
+
+## Module 2 implementation record — 20 November 2026
+
+The first implemented vertical slice uses the following concrete fields in the application:
+
+- `projects/{projectId}`: `organizationId`, `workspaceId`, optional `workstreamId` and `teamId`, `name`, `slug`, optional `description`, `status` (`active` or `archived`), `createdBy`, `createdAt`, `updatedAt`, optional `archivedAt`.
+- `tasks/{taskId}`: `organizationId`, `workspaceId`, optional `projectId`, `workstreamId` and `teamId`, `title`, optional `description` and `acceptanceCriteria`, required `accountableUserId`, bounded `collaboratorUserIds`, `status`, `priority`, optional `dueAt`, `parentTaskId`, `dependencyIds`, `createdBy`, `updatedBy`, `createdAt`, `updatedAt`, optional `completedAt` and `archivedAt`.
+
+The accountable owner is required at creation. A team association is optional; when supplied, the accountable owner must be an active member of that team for non-Admin creation. Project and task scope is enforced by trusted server services. This implementation record describes the shipped code path; the supplied Draft v1.0 schema remains preserved in `docs/supplied/`.
+
+---
+
+## Appendix B — Module 2 and Module 3 implementation record (2026-11-20)
+
+This appendix describes the current application implementation. It supersedes the “not yet implemented” inventory in Appendix A for the collections below; Appendix A remains a historical Release 1 snapshot.
+
+### B.1 Projects and tasks
+
+`projects/{projectId}` stores `organizationId`, `workspaceId`, optional `teamId` and `workstreamId`, `name`, unique workspace-scoped `slug`, optional `description`, `status` (`active` or `archived`), `createdBy`, `createdAt`, `updatedAt` and optional `archivedAt`.
+
+`tasks/{taskId}` stores `organizationId`, `workspaceId`, optional `projectId`, `teamId` and `workstreamId`, `title`, optional `description` and `acceptanceCriteria`, required `accountableUserId`, bounded `collaboratorUserIds`, `status`, `priority`, optional `dueAt`, optional `parentTaskId`, bounded `dependencyIds`, optional `referenceLinks`, `createdBy`, `updatedBy`, `createdAt`, `updatedAt`, optional `completedAt` and optional `archivedAt`.
+
+The project’s team/workstream context is inherited by a new task when omitted. If a task explicitly supplies context, it must match the project context. If both team and workstream are set, their `workstreamTeams` relationship must be active. The accountable owner must be active; for non-Admin assignment, they must be an active member of each selected team/workstream.
+
+Task subcollections:
+
+- `tasks/{taskId}/comments/{commentId}` — author, body, validated `mentionedUserIds` and creation time.
+- `tasks/{taskId}/activity/{activityId}` — actor, action, summary and creation time; written with the associated mutation where supported.
+
+Parent-task and dependency relationships are checked for self-reference and circular paths by the trusted task service. Task reference URLs are stored on the task document and displayed only to users already authorised to access that task.
+
+### B.2 Daily work reports
+
+`workReports/{workspaceId}_{userId}_{YYYY-MM-DD}` stores `organizationId`, `workspaceId`, `userId`, `reportDate` (organisation-local `YYYY-MM-DD`), optional `teamId`/`workstreamId`, `status` (`draft`, `submitted`, `needs_revision`, `approved`), `version`, optional `reviewerId`, `reviewerComment`, `submittedAt`, `reviewedAt`, and `createdAt`/`updatedAt`.
+
+Nested subcollections:
+
+- `entries/{entryId}` — optional `taskId`, `activityTitle`, `workCompleted`, optional `progressSummary`, optional `timeSpentMinutes`, `blockers[]`, `nextSteps[]`, `linkUrls[]`, `createdAt` and `updatedAt`. Reference URLs point to files stored outside Inhub Workspace; no file contents are uploaded to Firestore.
+- `versions/{version}` — immutable submission snapshot containing `version`, `submittedBy`, `submittedAt` and the entries as they existed at submission time.
+- `reviews/{reviewId}` — append-only review record containing `reviewerId`, `decision`, optional `comment`, the reviewed `version` and `createdAt`.
+
+Authors may edit entries only while the report is `draft` or `needs_revision`. Submitting creates a version snapshot and locks the report. A reviewer must be an Admin or a Lead assigned to the report’s team/workstream and cannot review their own report. Revision requests require a comment. Time spent is optional and is not treated as attendance or as proof of working hours.

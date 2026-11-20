@@ -13,10 +13,16 @@ export const EVENT_TYPES = [
   "USER_TEAM_ASSIGNED",
   "USER_WORKSTREAM_ASSIGNED",
   "ACCOUNT_STATUS_CHANGED",
+  "TASK_ASSIGNED",
+  "TASK_STATUS_CHANGED",
+  "TASK_COMMENTED",
+  "WORK_REPORT_SUBMITTED",
+  "WORK_REPORT_APPROVED",
+  "WORK_REPORT_NEEDS_REVISION",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
-export type EventCategory = "account" | "access" | "organisation";
+export type EventCategory = "account" | "access" | "organisation" | "work";
 
 export interface EventMeta {
   label: string;
@@ -61,6 +67,12 @@ export const EVENT_CATALOGUE: Record<EventType, EventMeta> = {
     channels: { inApp: true, email: true },
     module: 1,
   },
+  TASK_ASSIGNED: { label: "Task assignments", description: "A task was assigned or reassigned to you.", category: "work", essential: false, channels: { inApp: true, email: true }, module: 2 },
+  TASK_STATUS_CHANGED: { label: "Task updates", description: "A task you participate in changed status.", category: "work", essential: false, channels: { inApp: true, email: false }, module: 2 },
+  TASK_COMMENTED: { label: "Task comments and mentions", description: "A task participant commented or mentioned you.", category: "work", essential: false, channels: { inApp: true, email: true }, module: 2 },
+  WORK_REPORT_SUBMITTED: { label: "Report submissions", description: "A report is waiting for your review.", category: "work", essential: false, channels: { inApp: true, email: true }, module: 3 },
+  WORK_REPORT_APPROVED: { label: "Report approved", description: "Your work report was approved.", category: "work", essential: false, channels: { inApp: true, email: true }, module: 3 },
+  WORK_REPORT_NEEDS_REVISION: { label: "Report revisions", description: "Your reviewer requested changes to a report.", category: "work", essential: false, channels: { inApp: true, email: true }, module: 3 },
   ACCOUNT_STATUS_CHANGED: {
     label: "Account status",
     description: "Your account was suspended, deactivated or reactivated.",

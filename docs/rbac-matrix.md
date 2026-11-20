@@ -70,7 +70,7 @@ Legend:
 | Change task status | Full | Scoped | Own assigned task, allowed transitions only |
 | Delete tasks | Full, preferably soft-delete | No by default | No |
 | Comment/mention | Full | Scoped | Accessible task only |
-| Add attachments | Full | Scoped | Accessible task/report only |
+| Add document/reference links | Full | Scoped | Accessible task/report only |
 | View work reports | Full | Scoped | Own reports |
 | Submit work reports | Full | Own report if also acting as a member | Own reports |
 | Review/approve reports | Full | Scoped reports | No |
@@ -110,7 +110,7 @@ A user may access a task when one or more of these conditions is true:
 - They are a collaborator explicitly added to the task.
 - The task is shared with a team to which they have active membership.
 
-Task comments and attachments inherit the parent task's access. Direct access by guessed IDs must be denied.
+Task comments and document/reference links inherit the parent task's access. Direct access by guessed IDs must be denied.
 
 ### 5.6 Report scope
 
@@ -128,7 +128,7 @@ By default, the assignee may update:
 
 - Status, within permitted transitions.
 - Progress summary, if enabled.
-- Comments and task attachments.
+- Comments and task document/reference links.
 - Time/work log references, when the reporting module is released.
 
 The assignee may not change:
@@ -175,7 +175,7 @@ Do not store only a role in a client-controlled custom claim and trust it indefi
 - [ ] Admin can access all workstreams, teams, projects, tasks and reports.
 - [ ] Client cannot create or modify audit logs.
 - [ ] Client cannot mark email deliveries as sent.
-- [ ] Task comments and attachments inherit task permissions.
+- [ ] Task comments and document/reference links inherit task permissions.
 - [ ] Cross-team task operation checks every affected scope.
 
 ## 10. Decisions to revisit

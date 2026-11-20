@@ -237,6 +237,9 @@ export const RELEASED_NAV: ReadonlySet<NavKey> = new Set<NavKey>([
   "people",
   "activity",
   "settings",
+  "projects",
+  "tasks",
+  "reports",
 ]);
 
 const NAV_BY_ROLE: Record<Role, readonly NavKey[]> = {

@@ -11,7 +11,7 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 let env: RulesTestEnvironment;
 
 beforeAll(async () => {
-  env = await initializeTestEnvironment({ projectId: "demo-inhub", firestore: { rules: readFileSync("firestore.rules", "utf8"), host: "127.0.0.1", port: 8080 } });
+  env = await initializeTestEnvironment({ projectId: "demo-inhub", firestore: { rules: readFileSync("firestore.rules", "utf8"), host: "127.0.0.1", port: 8085 } });
 });
 afterAll(async () => env?.cleanup());
 

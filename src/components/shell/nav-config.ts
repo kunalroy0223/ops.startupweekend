@@ -22,6 +22,8 @@ export const CRUMB_LABEL: Record<string, string> = {
   overview: "Overview",
   workspaces: "Workspaces",
   structure: "Workstreams & Teams",
+  projects: "Projects",
+  tasks: "Tasks",
   workstreams: "Workstream",
   teams: "Team",
   people: "People",

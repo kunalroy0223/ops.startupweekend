@@ -107,7 +107,10 @@ describe("navigation", () => {
   it("never shows inaccessible or unreleased items", () => {
     expect(navFor(actor("member"))).not.toContain("analytics");
     expect(navFor(actor("admin"))).toContain("settings");
-    expect(navFor(actor("admin"))).not.toContain("tasks");
+    expect(navFor(actor("admin"))).toContain("tasks");
+    expect(navFor(actor("admin"))).toContain("reports");
+    expect(navFor(actor("member"))).toContain("tasks");
+    expect(navFor(actor("member"))).toContain("reports");
     expect(navFor(actor("member", "suspended"))).toEqual([]);
   });
 });

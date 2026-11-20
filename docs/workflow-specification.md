@@ -81,7 +81,7 @@ A task should support:
 - Due date/time and configured timezone.
 - Deliverable/acceptance criteria.
 - Parent task and dependency links.
-- Attachments and reference links.
+- Links to externally stored documents and deliverables. File uploads are outside the Firestore-only platform scope.
 
 An accountable owner should be clear even when collaborators are added. If an entire team is assigned, a Lead should identify an accountable person before the task enters In Progress. This is a proposed operational rule.
 
@@ -144,7 +144,7 @@ Report entries:
 - Time spent in minutes, if time logging is enabled.
 - Blockers.
 - Next steps.
-- Links and attachments.
+- Links to externally stored documents and deliverables. File uploads are outside the Firestore-only platform scope.
 
 ### 3.5 Review permissions
 

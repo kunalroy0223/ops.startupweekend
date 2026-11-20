@@ -16,7 +16,7 @@ export interface NoticeEmailProps {
  * #FFFFFF paper, #8298AB slate. Email clients ignore web fonts, so the
  * hierarchy is carried by weight and the inked button.
  */
-export function NoticeEmail({ preview, eyebrow, heading, paragraphs, cta, footnote, logoUrl, appUrl }: NoticeEmailProps) {
+export function NoticeEmail({ preview, eyebrow, heading, paragraphs, cta, footnote, logoUrl }: NoticeEmailProps) {
   return (
     <Html lang="en">
       <Head />

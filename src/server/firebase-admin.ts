@@ -17,7 +17,7 @@ function adminApp(): App {
   if (existing) return (app = existing);
   const env = serverEnv();
   if (env.USE_FIREBASE_EMULATORS) {
-    process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8080";
+    process.env.FIRESTORE_EMULATOR_HOST ??= "127.0.0.1:8085";
     process.env.FIREBASE_AUTH_EMULATOR_HOST ??= "127.0.0.1:9099";
     app = initializeApp({ projectId: env.FIREBASE_PROJECT_ID });
   } else {
@@ -28,7 +28,6 @@ function adminApp(): App {
         // Vercel stores multi-line keys with literal "\n".
         privateKey: env.FIREBASE_PRIVATE_KEY!.replace(/\\n/g, "\n"),
       }),
-      storageBucket: env.FIREBASE_STORAGE_BUCKET,
     });
   }
   return app;

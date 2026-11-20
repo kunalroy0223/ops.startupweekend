@@ -86,3 +86,25 @@ Invitation events are skipped at send time when the invitation is no longer pend
 ## 8. What cannot be tested yet
 
 Real email sending, Resend idempotency behaviour, and webhook delivery need a verified domain and API key. Until then deliveries are recorded as `failed / provider_not_configured`, which the e2e run asserts.
+
+
+## Module 2 implementation update — 20 November 2026
+
+The event catalogue now includes:
+- `TASK_ASSIGNED`: immediate in-app and email notification to the accountable owner when a task is created or reassigned.
+- `TASK_STATUS_CHANGED`: in-app notification to the accountable owner when the task status changes; email is disabled by default to avoid noisy delivery.
+
+Both events are emitted through the transactional domain-event outbox and resolved against the current active user profile at processing time.
+
+## 9. Module 2 and Module 3 events
+
+| Event | In-app | Email | Recipients |
+|---|---|---|---|
+| `TASK_ASSIGNED` | ✓ | ✓ | New accountable owner receives assignment email/in-app; prior owner and active scoped Leads receive in-app updates on reassignment/assignment. |
+| `TASK_STATUS_CHANGED` | ✓ | — | Active accountable owner, collaborators, active team members and scoped Leads who retain task access; email is intentionally disabled. |
+| `TASK_COMMENTED` | ✓ | ✓ | Active task participants and scoped Leads receive in-app updates; explicitly mentioned active users who still have task access can also receive email. |
+| `WORK_REPORT_SUBMITTED` | ✓ | ✓ | Active Leads of the report's assigned team/workstream; active Admins are the fallback when no scoped Lead is available. |
+| `WORK_REPORT_APPROVED` | ✓ | ✓ | Active report author. |
+| `WORK_REPORT_NEEDS_REVISION` | ✓ | ✓ | Active report author. |
+
+All six events are written in the business transaction through the outbox. Recipient resolution uses current account/membership state at processing time. Scheduled due-date reminders, digests and other recurring automation remain in Release 5 rather than being represented as immediate events in Modules 2 or 3.

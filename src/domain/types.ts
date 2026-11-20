@@ -215,3 +215,114 @@ export interface EmailDelivery {
   createdAt: string;
   updatedAt: string;
 }
+
+
+export const TASK_STATUSES = ["backlog", "assigned", "in_progress", "in_review", "completed", "blocked", "cancelled"] as const;
+export type TaskStatus = (typeof TASK_STATUSES)[number];
+export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
+export type TaskPriority = (typeof TASK_PRIORITIES)[number];
+
+export interface Project {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  workstreamId?: string;
+  teamId?: string;
+  name: string;
+  slug: string;
+  description?: string;
+  status: "active" | "archived";
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+}
+
+export interface Task {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  projectId?: string;
+  workstreamId?: string;
+  teamId?: string;
+  title: string;
+  description?: string;
+  acceptanceCriteria?: string;
+  accountableUserId: string;
+  collaboratorUserIds: string[];
+  status: TaskStatus;
+  priority: TaskPriority;
+  dueAt?: string;
+  parentTaskId?: string;
+  dependencyIds: string[];
+  referenceLinks?: string[];
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  completedAt?: string;
+  archivedAt?: string;
+}
+
+export interface TaskComment {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  taskId: string;
+  authorUserId: string;
+  body: string;
+  mentionedUserIds: string[];
+  createdAt: string;
+}
+
+
+export type WorkReportStatus = "draft" | "submitted" | "needs_revision" | "approved";
+
+export interface WorkReport {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  userId: string;
+  reportDate: string;
+  teamId?: string;
+  workstreamId?: string;
+  status: WorkReportStatus;
+  reviewerId?: string;
+  reviewerComment?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+}
+
+export interface WorkReportEntry {
+  id: string;
+  taskId?: string;
+  activityTitle: string;
+  workCompleted: string;
+  progressSummary?: string;
+  timeSpentMinutes?: number;
+  blockers: string[];
+  nextSteps: string[];
+  linkUrls: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkReportReview {
+  id: string;
+  reviewerId: string;
+  decision: "approved" | "needs_revision";
+  comment?: string;
+  version: number;
+  createdAt: string;
+}
+
+export interface WorkReportVersion {
+  id: string;
+  version: number;
+  submittedAt: string;
+  submittedBy: string;
+  entries: Omit<WorkReportEntry, "createdAt" | "updatedAt">[];
+}

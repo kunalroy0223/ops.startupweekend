@@ -2,9 +2,11 @@ import "server-only";
 import type { EventType } from "@/domain/events";
 import { ROLE_LABEL, USER_STATUS_LABEL, type DomainEvent, type Invitation, type Role, type UserProfile, type UserStatus } from "@/domain/types";
 import { col, fromDoc } from "../db";
-import { appUrl } from "../env";
+import { appUrl, serverEnv } from "../env";
 import { unseal } from "../tokens";
 import type { NoticeContent } from "../email/render";
+import type { Task } from "@/domain/types";
+import { canAccessTask } from "../services/tasks";
 
 /**
  * A resolved recipient. `uid` is absent only for people without an account
@@ -30,7 +32,9 @@ export interface EventHandler {
 async function getUser(uid: unknown): Promise<UserProfile | null> {
   if (typeof uid !== "string" || !uid) return null;
   const snap = await col("users").doc(uid).get();
-  return snap.exists ? fromDoc<UserProfile>(snap, "uid") : null;
+  if (!snap.exists) return null;
+  const user = fromDoc<UserProfile>(snap, "uid");
+  return user.organizationId === serverEnv().ORGANIZATION_ID ? user : null;
 }
 
 async function getName(collection: "teams" | "workstreams", id: unknown): Promise<string | null> {
@@ -188,6 +192,190 @@ const handlers: Record<EventType, EventHandler> = {
     },
   },
 
+  TASK_ASSIGNED: {
+    async resolve(event) {
+      const taskId = String(event.payload.taskId ?? event.resourceId);
+      const title = String(event.payload.title ?? "A task");
+      const link = `/tasks/${encodeURIComponent(taskId)}`;
+      const newOwner = await getUser(event.payload.userId);
+      const previousUserId = typeof event.payload.previousUserId === "string" ? event.payload.previousUserId : "";
+      const isReassignment = !!previousUserId && previousUserId !== String(event.payload.userId);
+      const recipients = new Map<string, Recipient>();
+
+      if (newOwner && newOwner.status === "active") {
+        recipients.set(newOwner.uid, {
+          key: newOwner.uid, uid: newOwner.uid, email: newOwner.email,
+          inApp: { title: isReassignment ? "Task assigned to you" : "New task assigned", body: title, actionUrl: link, resourceType: "task", resourceId: taskId },
+          compose: async () => ({
+            templateId: "task_assigned", subject: `You've been assigned: ${title}`,
+            preview: `A task has been assigned to you: ${title}.`, eyebrow: "Task assignment",
+            heading: "A new task is yours to own.",
+            paragraphs: [`${title} has been assigned to you as the accountable owner. Open Inhub Workspace to review the details, due date and acceptance criteria.`],
+            cta: { label: "View task", href: appUrl(link) },
+          }),
+        });
+      }
+
+      if (isReassignment) {
+        const prior = await getUser(previousUserId);
+        if (prior && prior.status === "active" && prior.uid !== event.actorUserId) {
+          recipients.set(prior.uid, {
+            key: prior.uid, uid: prior.uid, email: prior.email, only: { email: false },
+            inApp: { title: "Task reassigned", body: `You are no longer the accountable owner of ${title}.`, actionUrl: "/tasks", resourceType: "task", resourceId: taskId },
+            compose: async () => { throw new Error("Email is disabled for prior task owners."); },
+          });
+        }
+
+      }
+
+      const scopes = [
+        ...(typeof event.payload.teamId === "string" && event.payload.teamId ? [{ kind: "team" as const, id: event.payload.teamId }] : []),
+        ...(typeof event.payload.workstreamId === "string" && event.payload.workstreamId ? [{ kind: "workstream" as const, id: event.payload.workstreamId }] : []),
+      ];
+      for (const scope of scopes) {
+        for (const lead of await activeLeadsOf(scope.kind, scope.id)) {
+          if (lead.uid === event.actorUserId || recipients.has(lead.uid)) continue;
+          recipients.set(lead.uid, {
+            key: lead.uid, uid: lead.uid, email: lead.email, only: { email: false },
+            inApp: { title: isReassignment ? "Task reassigned in your scope" : "Task assigned in your scope", body: isReassignment ? `${title} has a new accountable owner.` : `${title} was assigned within your scope.`, actionUrl: link, resourceType: "task", resourceId: taskId },
+            compose: async () => { throw new Error("Email is disabled for task assignment activity."); },
+          });
+        }
+      }
+      return [...recipients.values()];
+    },
+  },
+  TASK_STATUS_CHANGED: {
+    async resolve(event) {
+      const taskId = String(event.payload.taskId ?? event.resourceId);
+      const taskSnap = await col("tasks").doc(taskId).get();
+      if (!taskSnap.exists) return [];
+      const task = fromDoc<Task>(taskSnap);
+      const title = String(event.payload.title ?? task.title ?? "A task");
+      const status = String(event.payload.status ?? "updated").replaceAll("_", " ");
+      const ids = new Set<string>([
+        ...(Array.isArray(event.payload.userIds) ? event.payload.userIds.filter((x): x is string => typeof x === "string") : []),
+        task.accountableUserId,
+        ...task.collaboratorUserIds,
+      ]);
+      if (task.teamId) {
+        const memberships = await col("teamMemberships").where("teamId", "==", task.teamId).where("status", "==", "active").get();
+        for (const membership of memberships.docs) if (typeof membership.data().userId === "string") ids.add(membership.data().userId);
+        for (const lead of await activeLeadsOf("team", task.teamId)) ids.add(lead.uid);
+      }
+      if (task.workstreamId) {
+        for (const lead of await activeLeadsOf("workstream", task.workstreamId)) ids.add(lead.uid);
+      }
+      const recipients: Recipient[] = [];
+      for (const uid of ids) {
+        if (!uid || uid === event.actorUserId) continue;
+        const user = await getUser(uid);
+        if (!user || user.status !== "active" || !await canAccessTask(user, task)) continue;
+        recipients.push({
+          key: user.uid, uid: user.uid, email: user.email, only: { email: false },
+          inApp: { title: "Task status updated", body: `${title} is now ${status}.`, actionUrl: `/tasks/${encodeURIComponent(taskId)}`, resourceType: "task", resourceId: taskId },
+          compose: async () => { throw new Error("Email is disabled for task status updates."); },
+        });
+      }
+      return recipients;
+    },
+  },
+  TASK_COMMENTED: {
+    async resolve(event) {
+      const taskId = String(event.payload.taskId ?? event.resourceId);
+      const taskSnap = await col("tasks").doc(taskId).get();
+      if (!taskSnap.exists) return [];
+      const task = fromDoc<Task>(taskSnap);
+      const title = String(event.payload.title ?? task.title ?? "A task");
+      const author = await getUser(event.actorUserId);
+      const preview = String(event.payload.preview ?? "A new comment was added.").slice(0, 180);
+      const ids = new Set<string>(Array.isArray(event.payload.userIds) ? event.payload.userIds.filter((x): x is string => typeof x === "string") : []);
+      const mentioned = new Set<string>(Array.isArray(event.payload.mentionedUserIds) ? event.payload.mentionedUserIds.filter((x): x is string => typeof x === "string") : []);
+      for (const uid of mentioned) ids.add(uid);
+      ids.add(task.accountableUserId);
+      for (const uid of task.collaboratorUserIds ?? []) ids.add(uid);
+      if (task.teamId) {
+        const memberships = await col("teamMemberships").where("teamId", "==", task.teamId).where("status", "==", "active").get();
+        for (const membership of memberships.docs) if (typeof membership.data().userId === "string") ids.add(membership.data().userId);
+        for (const lead of await activeLeadsOf("team", task.teamId)) ids.add(lead.uid);
+      }
+      if (task.workstreamId) for (const lead of await activeLeadsOf("workstream", task.workstreamId)) ids.add(lead.uid);
+
+      const link = `/tasks/${encodeURIComponent(taskId)}`;
+      const out: Recipient[] = [];
+      for (const uid of ids) {
+        if (!uid || uid === event.actorUserId) continue;
+        const user = await getUser(uid);
+        if (!user || user.status !== "active" || !await canAccessTask(user, task)) continue;
+        const isMention = mentioned.has(uid);
+        out.push({
+          key: user.uid, uid: user.uid, email: user.email,
+          ...(isMention ? {} : { only: { email: false } }),
+          inApp: {
+            title: isMention ? "You were mentioned in a task" : "New comment on a task",
+            body: isMention ? `${author?.displayName ?? "A teammate"} mentioned you in ${title}.` : `${author?.displayName ?? "A teammate"} commented on ${title}.`,
+            actionUrl: link, resourceType: "task", resourceId: taskId,
+          },
+          compose: async () => isMention ? ({
+            templateId: "task_mention", subject: `You were mentioned in ${title}`, preview,
+            eyebrow: "Task mention", heading: "You were mentioned in a task comment.",
+            paragraphs: [`${author?.displayName ?? "A teammate"} mentioned you in ${title}.`, preview],
+            cta: { label: "Open task", href: appUrl(link) },
+          }) : { templateId: "task_comment", subject: `New comment on ${title}`, preview, eyebrow: "Task update", heading: "A new comment was added.", paragraphs: [preview], cta: { label: "Open task", href: appUrl(link) } },
+        });
+      }
+      return out;
+    },
+  },
+  WORK_REPORT_SUBMITTED: {
+    async resolve(event) {
+      const reportId = String(event.payload.reportId ?? event.resourceId);
+      const teamId = typeof event.payload.teamId === "string" ? event.payload.teamId : "";
+      const workstreamId = typeof event.payload.workstreamId === "string" ? event.payload.workstreamId : "";
+      const leads = [
+        ...(teamId ? await activeLeadsOf("team", teamId) : []),
+        ...(workstreamId ? await activeLeadsOf("workstream", workstreamId) : []),
+      ];
+      const recipients = new Map(leads.filter(u => u.uid !== event.actorUserId).map(u => [u.uid, u]));
+      if (!recipients.size) {
+        const admins = await col("users").where("organizationId", "==", String(event.organizationId)).where("role", "==", "admin").where("status", "==", "active").get();
+        for (const d of admins.docs) {
+          const user = fromDoc<UserProfile>(d, "uid");
+          if (user.uid !== event.actorUserId) recipients.set(user.uid, user);
+        }
+      }
+      const date = String(event.payload.reportDate ?? "");
+      return [...recipients.values()].map(user => ({
+        key: user.uid, uid: user.uid, email: user.email,
+        inApp: { title: "Work report submitted", body: `${date} report is ready for review.`, actionUrl: `/reports/${encodeURIComponent(reportId)}`, resourceType: "workReport", resourceId: reportId },
+        compose: async () => ({ templateId: "work_report_submitted", subject: `Work report submitted · ${date}`, preview: `${user.displayName}, a work report is waiting for your review.`, eyebrow: "Work report review", heading: "A report is ready for review.", paragraphs: [`A team member submitted their work report for ${date}. Review the reported work, time, blockers and next steps in Inhub Workspace.`], cta: { label: "Review report", href: appUrl(`/reports/${encodeURIComponent(reportId)}`) } }),
+      }));
+    },
+  },
+  WORK_REPORT_APPROVED: {
+    async resolve(event) {
+      const user = await getUser(event.payload.userId);
+      if (!user || user.status !== "active") return [];
+      const reportId = String(event.payload.reportId ?? event.resourceId);
+      const date = String(event.payload.reportDate ?? "");
+      return [{ key: user.uid, uid: user.uid, email: user.email,
+        inApp: { title: "Work report approved", body: `Your report for ${date} was approved.`, actionUrl: `/reports/${encodeURIComponent(reportId)}`, resourceType: "workReport", resourceId: reportId },
+        compose: async () => ({ templateId: "work_report_approved", subject: `Your work report was approved · ${date}`, preview: `Your report for ${date} was approved.`, eyebrow: "Work report", heading: "Your report was approved.", paragraphs: [`Your work report for ${date} has been approved by your reviewer.`], cta: { label: "View report", href: appUrl(`/reports/${encodeURIComponent(reportId)}`) } }),
+      }];
+    },
+  },
+  WORK_REPORT_NEEDS_REVISION: {
+    async resolve(event) {
+      const user = await getUser(event.payload.userId);
+      if (!user || user.status !== "active") return [];
+      const reportId = String(event.payload.reportId ?? event.resourceId);
+      const date = String(event.payload.reportDate ?? "");
+      return [{ key: user.uid, uid: user.uid, email: user.email,
+        inApp: { title: "Work report needs revision", body: `Your report for ${date} was returned with feedback.`, actionUrl: `/reports/${encodeURIComponent(reportId)}`, resourceType: "workReport", resourceId: reportId },
+        compose: async () => ({ templateId: "work_report_revision", subject: `Please revise your work report · ${date}`, preview: `Your report for ${date} needs an update.`, eyebrow: "Work report", heading: "Your reviewer requested a revision.", paragraphs: [`Your work report for ${date} was returned with feedback. Open the report to read the review comment and make the requested changes.`], cta: { label: "Update report", href: appUrl(`/reports/${encodeURIComponent(reportId)}`) } }),
+      }];
+    },
+  },
   USER_TEAM_ASSIGNED: assignmentHandler("team"),
   USER_WORKSTREAM_ASSIGNED: assignmentHandler("workstream"),
 };
