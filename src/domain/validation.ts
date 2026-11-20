@@ -109,3 +109,92 @@ export function slugify(input: string): string {
 export function searchKey(displayName: string): string {
   return displayName.trim().toLowerCase().replace(/\s+/g, " ");
 }
+
+
+const safeHttpUrl = z.string().url().max(2048).refine((value) => {
+  try { return ["http:", "https:"].includes(new URL(value).protocol); }
+  catch { return false; }
+}, "Use an HTTP or HTTPS URL");
+
+const taskId = id;
+export const projectCreateSchema = z.object({
+  workspaceId: id,
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  name,
+  description,
+});
+export const projectUpdateSchema = z.object({ name, description }).strict();
+
+export const taskCreateSchema = z.object({
+  workspaceId: id,
+  projectId: id.optional(),
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(5000).optional(),
+  acceptanceCriteria: z.string().trim().max(3000).optional(),
+  accountableUserId: id,
+  collaboratorUserIds: z.array(id).max(20).default([]),
+  priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  dueAt: z.string().datetime().optional(),
+  parentTaskId: taskId.optional(),
+  dependencyIds: z.array(id).max(20).default([]),
+  referenceLinks: z.array(safeHttpUrl).max(20).default([]),
+});
+export const taskUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(160).optional(),
+  description: z.string().trim().max(5000).optional(),
+  acceptanceCriteria: z.string().trim().max(3000).optional(),
+  accountableUserId: id.optional(),
+  collaboratorUserIds: z.array(id).max(20).optional(),
+  teamId: id.nullable().optional(),
+  workstreamId: id.nullable().optional(),
+  projectId: id.nullable().optional(),
+  priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  dueAt: z.string().datetime().nullable().optional(),
+  parentTaskId: id.nullable().optional(),
+  dependencyIds: z.array(id).max(20).optional(),
+  referenceLinks: z.array(safeHttpUrl).max(20).optional(),
+}).strict();
+export const taskStatusSchema = z.object({
+  status: z.enum(["backlog", "assigned", "in_progress", "in_review", "completed", "blocked", "cancelled"]),
+  reason: z.string().trim().max(500).optional(),
+});
+export const taskCommentSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
+  mentionedUserIds: z.array(id).max(20).default([]),
+});
+
+
+const reportDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").refine((v) => {
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}, "Enter a valid reporting date");
+
+export const workReportCreateSchema = z.object({
+  workspaceId: id,
+  reportDate,
+  teamId: id.optional(),
+  workstreamId: id.optional(),
+}).strict();
+
+export const workReportEntrySchema = z.object({
+  taskId: id.optional(),
+  activityTitle: z.string().trim().min(2).max(160),
+  workCompleted: z.string().trim().min(2).max(5000),
+  progressSummary: z.string().trim().max(2000).optional(),
+  timeSpentMinutes: z.number().int().min(0).max(1440).optional(),
+  blockers: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+  nextSteps: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+  linkUrls: z.array(safeHttpUrl).max(20).default([]),
+}).strict();
+
+export const workReportReviewSchema = z.object({
+  decision: z.enum(["approved", "needs_revision"]),
+  comment: z.string().trim().max(2000).optional(),
+}).superRefine((value, ctx) => {
+  if (value.decision === "needs_revision" && !value.comment?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["comment"], message: "A comment is required when requesting a revision." });
+  }
+});

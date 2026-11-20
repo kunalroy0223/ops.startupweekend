@@ -5,6 +5,20 @@ describe("notification channel policy", () => {
   it("covers the Module 1 event types", () => {
     for (const t of ["USER_INVITED", "USER_ROLE_CHANGED", "USER_TEAM_ASSIGNED", "USER_WORKSTREAM_ASSIGNED", "ACCOUNT_STATUS_CHANGED"]) expect(EVENT_TYPES).toContain(t);
   });
+  it("registers Module 2 task notifications", () => {
+    expect(EVENT_TYPES).toContain("TASK_ASSIGNED");
+    expect(EVENT_TYPES).toContain("TASK_STATUS_CHANGED");
+    expect(EVENT_CATALOGUE.TASK_ASSIGNED.module).toBe(2);
+    expect(EVENT_CATALOGUE.TASK_COMMENTED.module).toBe(2);
+    expect(resolveChannels("TASK_ASSIGNED", DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
+  });
+  it("registers Module 3 report lifecycle notifications", () => {
+    for (const type of ["WORK_REPORT_SUBMITTED", "WORK_REPORT_APPROVED", "WORK_REPORT_NEEDS_REVISION"] as const) {
+      expect(EVENT_TYPES).toContain(type);
+      expect(EVENT_CATALOGUE[type].module).toBe(3);
+      expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
+    }
+  });
   it("essential events ignore opt-outs", () => {
     const prefs = { ...DEFAULT_PREFERENCES, emailEnabled: false, inAppEnabled: false, deliveryMode: "off" as const, disabledEventTypes: ["USER_ROLE_CHANGED"] };
     expect(resolveChannels("USER_ROLE_CHANGED", prefs)).toEqual({ inApp: true, email: "immediate" });

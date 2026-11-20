@@ -8,7 +8,6 @@ export const publicEnv = {
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN ?? "",
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? "",
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ?? "",
   useEmulators: process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true",
   authEmulatorUrl: process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_URL ?? "http://127.0.0.1:9099",
 };

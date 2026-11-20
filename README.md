@@ -1,6 +1,6 @@
 # Inhub Workspace
 
-Internal work-management platform for the Inhub Entrepreneurship Cell. People, teams, workstreams, (soon) tasks and daily reports, with role-based access for **Admin**, **Lead** and **Team Member**.
+Internal work-management platform for the Inhub Entrepreneurship Cell. People, teams, workstreams, projects, tasks and daily reports, with role-based access for **Admin**, **Lead** and **Team Member**.
 
 **Status (2026-11-19):** foundation + Module 1 built and tested against the Firebase emulators. Not yet connected to a real Firebase project, Resend or Vercel, because no credentials were available. See [What still needs real credentials](#what-still-needs-real-credentials).
 
@@ -46,7 +46,7 @@ CRON_SECRET=<any 24+ character string>
 Then, in three terminals:
 
 ```bash
-npm run emulators                                   # 1. Auth :9099, Firestore :8080, UI :4000
+npm run emulators                                   # 1. Auth :9099, Firestore :8085, UI :4000
 npm run bootstrap -- --email admin@example.org --name "First Admin" --password 'Admin-pass-123'   # 2. once
 npm run dev                                         # 3. http://localhost:3000
 ```
@@ -67,7 +67,7 @@ Latest run (2026-11-19): all of the above pass.
 ## Going live
 
 1. **Firebase**: create a project, enable *Authentication → Email/Password*, create Firestore (production mode). Deploy rules and indexes:
-   `cp .firebaserc.example .firebaserc` (set your project ID), then `npx firebase deploy --only firestore:rules,firestore:indexes,storage`.
+   `cp .firebaserc.example .firebaserc` (set your project ID), then `npx firebase deploy --only firestore:rules,firestore:indexes`.
 2. **Service account**: *Project settings → Service accounts → Generate new private key*. Put `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` in Vercel env vars. Never commit the JSON file.
 3. **Web app config**: *Project settings → Your apps → Web*. Copy the `NEXT_PUBLIC_FIREBASE_*` values.
 4. **Resend**: add and verify `startupweekend.sbs` (SPF + DKIM), create an API key → `RESEND_API_KEY`. Add a webhook to `https://<your-domain>/api/webhooks/resend` for `email.delivered`, `email.bounced`, `email.failed` → `RESEND_WEBHOOK_SECRET`.

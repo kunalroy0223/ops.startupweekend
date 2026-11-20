@@ -18,10 +18,9 @@ const serverSchema = z
     FIREBASE_PROJECT_ID: z.string().min(1),
     FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
     FIREBASE_PRIVATE_KEY: z.string().optional(),
-    FIREBASE_STORAGE_BUCKET: z.string().optional(),
     SESSION_MAX_AGE_DAYS: z.coerce.number().int().min(1).max(14).default(5),
     RESEND_API_KEY: z.string().startsWith("re_").optional().or(z.literal("").transform(() => undefined)),
-    EMAIL_FROM: z.string().min(3).default("Inhub E-Cell <no-reply@startupweekend.sbs>"),
+    EMAIL_FROM: z.string().min(3).default("Startup Weekend Workspace <no-reply@startupweekend.sbs>"),
     EMAIL_REPLY_TO: z.string().email().optional().or(z.literal("").transform(() => undefined)),
     RESEND_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional().or(z.literal("").transform(() => undefined)),
     DATA_ENCRYPTION_KEY: z

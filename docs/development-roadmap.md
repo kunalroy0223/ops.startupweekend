@@ -21,7 +21,7 @@
 |---|---|---|
 | 0 — Engineering foundation | Repository audit, app shell, CI, environments, Firebase setup | Reliable technical baseline |
 | 1 — Platform foundation & administration | Authentication, RBAC, people, workspaces/workstreams/teams, audit, notification foundation | Admin can establish and administer the organisation |
-| 2 — Task & project management | Projects, tasks, Kanban/list views, comments, attachments, workflow | Work can be assigned and tracked |
+| 2 — Task & project management | Projects, tasks, Kanban/list views, comments, document links, workflow | Work can be assigned and tracked |
 | 3 — Work reports & timesheets | Daily reports, entries, review and approval | Work execution can be documented and reviewed |
 | 4 — Dashboards & analytics | Team, workstream and personal reporting | Operational status becomes measurable |
 | 5 — Notifications & automation | Digests, reminders, scheduled rules and triggers | Routine follow-up is automated |
@@ -140,7 +140,7 @@ Notification infrastructure begins in Release 1. Later releases add event types 
 - Board/Kanban view and list/table view.
 - Filters and search.
 - Subtasks and dependencies.
-- Comments, mentions and attachments.
+- Comments, mentions and document/reference links.
 - Task activity timeline.
 - Task-specific email and in-app events.
 
@@ -148,7 +148,7 @@ Notification infrastructure begins in Release 1. Later releases add event types 
 
 - Users see only tasks within their permitted scope.
 - Task ownership and status transitions are enforced server-side.
-- Comments and attachments inherit task permissions.
+- Comments and document/reference links inherit task permissions.
 - Task activity is auditable.
 - Board and list views stay in sync.
 - Due-date and assignment notifications are tested.
@@ -317,3 +317,65 @@ A feature is not “done” until it is implemented end-to-end, permission-teste
 2. Verify `startupweekend.sbs` in Resend (SPF + DKIM), create the API key and webhook.
 3. Create the GitHub repository and the Vercel project; set the environment variables.
 4. Run `npm run bootstrap` against production to create the first Admin.
+
+
+## Implementation update — Module 2 initial vertical slice (20 November 2026)
+
+Implemented in the current repository:
+- Project creation and scoped project listing.
+- Task creation with an accountable individual and optional team association.
+- Priority, due date, description and acceptance criteria fields.
+- Task register with search and status filtering.
+- Status transitions with role-aware server validation.
+- Audit events for project/task creation and task status changes.
+- Transactional outbox events for task assignment and status updates.
+- Firestore composite indexes for project and task queries.
+
+Still to implement before Module 2 can be considered complete:
+- Task detail view and full edit experience.
+- Comments, @mentions, document links and reference references.
+- Dependency and subtask management with cycle prevention.
+- Review/revision detail experience and reopen/cancel reason capture.
+- Comprehensive authorization integration tests and production emulator verification.
+
+## Implementation update — Modules 2 and 3 (20 November 2026)
+
+The current working tree now contains the following vertical slices. These are implemented in source; they are **not marked production-verified** until dependency installation, checks, emulator tests and a deployment smoke test have been run in the target environment.
+
+### Module 2 — Task & project management
+
+- Project creation, editing, scoped listing, progress summary and archive/restore service support.
+- Task creation and editing with one accountable owner, optional collaborators, team/workstream context, project association, priority, due date, description and acceptance criteria.
+- Project team/workstream context is inherited by tasks when not explicitly supplied and is checked for consistency by the server.
+- Task register with list and Kanban views, search, status, project and priority filters.
+- Task detail with role-aware status transitions, required cancellation/reopen reasons, parent-task and dependency links with cycle checks.
+- Task comments, validated mentions, reference links and a task activity timeline.
+- Task document/reference URLs and work-report deliverable links are validated and stored in Firestore; binary files remain in approved external storage.
+- Task assignment, status and comment/mention notifications through the transactional outbox. Participants and scoped Leads receive in-app activity updates; explicitly mentioned users may also receive email.
+- Task due dates and times are interpreted, stored and displayed in the organisation's configured timezone, independent of the browser timezone.
+
+### Module 3 — Work reports & timesheets
+
+- One deterministic daily report per author, workspace and date.
+- Draft reports with task-linked or standalone entries, work completed, progress, optional minutes, blockers, next steps and reference links.
+- Submission locks the editable report and stores an immutable version snapshot.
+- Lead review is limited to assigned team/workstream scope; Admins can review organisation-wide. Self-review is blocked.
+- Approval and revision requests append review history; a revision requires a comment and reopens the report for its author.
+- Submission and review notifications are emitted through the outbox.
+- No attendance inference or mandatory daily-hours minimum is imposed.
+
+### Verification and deployment gates
+
+- Unit tests were added for task and work-report validation and lifecycle notification registration.
+- TypeScript/TSX syntax parsing completed with no parse diagnostics in the current source tree.
+- Full `npm run check`, emulator tests and a production build remain pending. The execution environment could not complete dependency installation; see the delivery note accompanying the source archive.
+- The current Firebase JS SDK lockfile includes packages requiring Node.js `>=24.12.0`; `package.json` and the lockfile now target Node.js `24.x`. Configure the same major version in Vercel and use 24.12.0+ locally.
+- Task and report file uploads are intentionally out of scope; Firestore stores external document URLs only.
+- Deploy the updated Firestore indexes before exercising the Admin report list in production.
+
+
+### Release 2 and Release 3 implementation note — 20 November 2026
+
+The current codebase now contains the initial vertical slices for both releases: project/task management, scoped task collaboration and external document references, plus daily work reports with entry drafts, task links, time logging, immutable submission versions, Lead/Admin review, revision requests, review history and event-driven notifications. Task and report document references are URL values stored in Firestore; binary files are not uploaded to the platform.
+
+The implementation is source-complete for the listed features, but the exit criteria below remain gated on installing dependencies and running the full check suite on the declared Node 24 runtime, Firebase Emulator tests and production smoke testing. This note does not mark the releases production-verified.

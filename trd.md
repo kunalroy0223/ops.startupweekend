@@ -15,7 +15,7 @@
 | Icons | lucide-react |
 | Auth | Firebase Authentication (email + password) |
 | Database | Cloud Firestore (server-only writes via firebase-admin) |
-| Files | Firebase Storage (rules deny all until Module 2 attachments) |
+| Documents | Firestore stores approved document URLs and reference metadata; binary files remain in external document storage |
 | Email | Resend over HTTPS + React Email templates |
 | Hosting | Vercel (+ Vercel Cron) |
 | Validation | zod 4, shared by API and forms |
