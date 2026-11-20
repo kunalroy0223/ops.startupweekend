@@ -48,9 +48,14 @@ export function NoticeEmail({ preview, eyebrow, heading, paragraphs, cta, footno
           </Section>
           <Hr style={{ borderColor: "#D9DED7", margin: 0 }} />
           <Section style={{ padding: "16px 32px" }}>
-            <Text style={{ fontSize: 12, color: "#4D6070", margin: 0 }}>
-              Inhub Workspace · Inhub E-Cell, Inspiria Knowledge Campus, Siliguri. This is an automated message from a no-reply address. Manage
-              notifications at {appUrl}/notifications/preferences
+            <Text style={{ fontSize: 12, lineHeight: "1.6", color: "#4D6070", margin: 0 }}>
+              This is a system-generated mail. Please do not reply.
+            </Text>
+            <Text style={{ fontSize: 12, lineHeight: "1.6", color: "#4D6070", margin: "8px 0 0" }}>
+              For assistance, contact{" "}
+              <a href="mailto:admin@startupweekend.sbs" style={{ color: "#000000", fontWeight: 600 }}>
+                admin@startupweekend.sbs
+              </a>.
             </Text>
           </Section>
         </Container>
