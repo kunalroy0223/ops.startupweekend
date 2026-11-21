@@ -1,6 +1,6 @@
 import "server-only";
 import { Timestamp, type DocumentSnapshot, type Transaction } from "firebase-admin/firestore";
-import { isAdmin, type Actor } from "@/domain/authz";
+import { canManageAssignedScope, isAdmin, type Actor } from "@/domain/authz";
 import type { Project, Task, TaskStatus } from "@/domain/types";
 import { slugify } from "@/domain/validation";
 import { enqueueEvent, writeAudit } from "../audit";
@@ -65,12 +65,9 @@ export async function canAccessTask(actor: Actor, task: Task): Promise<boolean> 
   if (isAdmin(actor)) return true;
   const scope = await getScope(actor.uid);
   if (actor.role === "lead") {
-    // An unscoped task belongs to Admin-only space; workspace membership alone
-    // must not grant a Lead organisation-wide task visibility.
-    if (!task.teamId && !task.workstreamId) return false;
-    return scope.workspaceIds.has(task.workspaceId) &&
-      (!task.teamId || scope.leadTeamIds.has(task.teamId) || scope.teamIdsViaLedWorkstreams.has(task.teamId)) &&
-      (!task.workstreamId || scope.leadWorkstreamIds.has(task.workstreamId));
+    // An unscoped task belongs to Admin-only space. For a task linked to both
+    // a team and a workstream, either authorised Lead scope is sufficient.
+    return canManageAssignedScope(actor, scope, task.workspaceId, task.teamId, task.workstreamId);
   }
   if (task.accountableUserId === actor.uid || task.collaboratorUserIds.includes(actor.uid)) return true;
   if (task.teamId && scope.memberTeamIds.has(task.teamId)) return true;
@@ -82,8 +79,9 @@ async function assertTaskScope(actor: Actor, workspaceId: string, teamId?: strin
   if (actor.role !== "lead") throw forbidden("Only Admins and Leads can create or manage tasks.");
   const scope = await getScope(actor.uid);
   if (!scope.workspaceIds.has(workspaceId)) throw forbidden("This workspace is outside your assigned scope.");
-  if (teamId && !scope.leadTeamIds.has(teamId) && !scope.teamIdsViaLedWorkstreams.has(teamId)) throw forbidden("This team is outside your assigned scope.");
-  if (workstreamId && !scope.leadWorkstreamIds.has(workstreamId)) throw forbidden("This workstream is outside your assigned scope.");
+  if (!canManageAssignedScope(actor, scope, workspaceId, teamId, workstreamId)) {
+    throw forbidden("This team or workstream is outside your assigned scope.");
+  }
 }
 
 export async function listProjects(actor: Actor, includeArchived = false): Promise<Project[]> {
@@ -225,10 +223,7 @@ export async function listTasks(actor: Actor, includeArchived = false): Promise<
     if (isAdmin(actor)) return true;
     if (!scope) return false;
     if (actor.role === "lead") {
-      if (!task.teamId && !task.workstreamId) return false;
-      return scope.workspaceIds.has(task.workspaceId) &&
-        (!task.teamId || scope.leadTeamIds.has(task.teamId) || scope.teamIdsViaLedWorkstreams.has(task.teamId)) &&
-        (!task.workstreamId || scope.leadWorkstreamIds.has(task.workstreamId));
+      return canManageAssignedScope(actor, scope, task.workspaceId, task.teamId, task.workstreamId);
     }
     if (task.accountableUserId === actor.uid || task.collaboratorUserIds.includes(actor.uid)) return true;
     return !!task.teamId && scope.memberTeamIds.has(task.teamId);
@@ -248,7 +243,6 @@ export async function createTask(actor: Actor, input: {
   if (!isAdmin(actor) && !input.teamId && !input.workstreamId && !input.projectId) throw forbidden("Associate this task with a project, team or workstream within your scope.");
   let teamId = input.teamId;
   let workstreamId = input.workstreamId;
-  await assertTaskScope(actor, input.workspaceId, teamId, workstreamId);
   if (!await activeUser(input.accountableUserId)) throw new ApiError(422, "invalid_assignee", "Choose an active Inhub user as the accountable owner.");
   for (const uid of input.collaboratorUserIds) if (!await activeUser(uid)) throw new ApiError(422, "invalid_collaborator", "All collaborators must be active Inhub users.");
   if (input.projectId) {
@@ -261,7 +255,7 @@ export async function createTask(actor: Actor, input: {
     teamId ??= pd.teamId ?? undefined;
     workstreamId ??= pd.workstreamId ?? undefined;
   }
-  await assertTaskScope(actor, input.workspaceId, teamId, workstreamId);
+  if (teamId || workstreamId) await assertTaskScope(actor, input.workspaceId, teamId, workstreamId);
   if (!isAdmin(actor) && !teamId && !workstreamId) {
     throw forbidden("Tasks managed by Leads must be associated with a team or workstream in their scope.");
   }

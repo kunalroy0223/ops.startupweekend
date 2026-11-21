@@ -131,6 +131,32 @@ export function canViewWorkstream(actor: Actor, scope: Scope, workstreamId: stri
 }
 
 /**
+ * A Lead may manage a scoped resource through any one of their assigned scopes.
+ * When a resource carries both team and workstream associations, Lead
+ * membership in either association is sufficient, provided the resource is
+ * inside a workspace to which the Lead belongs.
+ */
+export function canManageAssignedScope(
+  actor: Actor,
+  scope: Scope,
+  workspaceId: string,
+  teamId?: string | null,
+  workstreamId?: string | null,
+): boolean {
+  if (!isActive(actor) || actor.role !== "lead") return false;
+  if (!scope.workspaceIds.has(workspaceId)) return false;
+
+  const hasLeadTeamScope = Boolean(
+    teamId && (scope.leadTeamIds.has(teamId) || scope.teamIdsViaLedWorkstreams.has(teamId))
+  );
+  const hasLeadWorkstreamScope = Boolean(
+    workstreamId && scope.leadWorkstreamIds.has(workstreamId)
+  );
+
+  return hasLeadTeamScope || hasLeadWorkstreamScope;
+}
+
+/**
  * A team is visible to a Lead assigned to it or to a workstream it is linked
  * to, and to a Team Member with an active membership in it.
  */
