@@ -56,14 +56,15 @@ export async function canReviewReport(actor: Actor, report: WorkReport): Promise
   return canReviewWithScope(actor, await getScope(actor.uid), report);
 }
 
-async function requireAuthor(actor: Actor, report: WorkReport) {
+async function requireAuthor(actor: Actor, report: WorkReport, allowDeleted = false) {
   if (report.userId !== actor.uid) throw forbidden("Only the report author can change this report.");
   if (!editable(report.status)) throw conflict("report_locked", "This report is locked after submission. A report can only be edited when it is a draft or needs revision.");
+  if (report.deletedAt && !allowDeleted) throw conflict("report_deleted", "This report has been deleted. Restore it from Deleted drafts before making changes.");
 }
 
-export async function listMyReports(actor: Actor): Promise<WorkReport[]> {
+export async function listMyReports(actor: Actor, includeDeleted = false): Promise<WorkReport[]> {
   const snap = await reports().where("organizationId", "==", org()).where("userId", "==", actor.uid).orderBy("reportDate", "desc").limit(100).get();
-  return snap.docs.map(d => fromDoc<WorkReport>(d)).sort((a, b) => b.reportDate.localeCompare(a.reportDate));
+  return snap.docs.map(d => fromDoc<WorkReport>(d)).filter(report => includeDeleted ? !!report.deletedAt : !report.deletedAt).sort((a, b) => b.reportDate.localeCompare(a.reportDate));
 }
 
 export type WorkReportReviewQueueItem = WorkReport & { userDisplayName: string };
@@ -74,7 +75,7 @@ export async function listReviewQueue(actor: Actor): Promise<WorkReportReviewQue
   const snap = isAdmin(actor)
     ? await base.orderBy("reportDate", "desc").limit(300).get()
     : await base.where("status", "==", "submitted").orderBy("submittedAt", "desc").limit(300).get();
-  const rows = snap.docs.map(d => fromDoc<WorkReport>(d)).filter(r => r.userId !== actor.uid);
+  const rows = snap.docs.map(d => fromDoc<WorkReport>(d)).filter(r => !r.deletedAt && r.userId !== actor.uid);
   const scope = isAdmin(actor) ? null : await getScope(actor.uid);
   const visible = scope ? rows.filter(r => canReviewWithScope(actor, scope, r)) : rows;
   const ids = [...new Set(visible.map(r => r.userId))];
@@ -91,6 +92,7 @@ export async function createOrOpenReport(actor: Actor, input: { workspaceId: str
     const snap = await tx.get(ref);
     if (snap.exists) {
       const current = fromDoc<WorkReport>(snap);
+      if (current.deletedAt) throw conflict("report_deleted", "A deleted report already exists for this workspace and date. Restore it from Deleted drafts first.");
       if (!editable(current.status)) throw conflict("report_already_submitted", "A report for this workspace and date has already been submitted.");
       if ((current.teamId ?? undefined) !== (input.teamId ?? undefined) || (current.workstreamId ?? undefined) !== (input.workstreamId ?? undefined)) {
         throw conflict("report_context_locked", "The reporting team or workstream cannot be changed after the report is created.");
@@ -123,7 +125,7 @@ export async function getWorkReportDetail(actor: Actor, id: string): Promise<Wor
   const snap = await reportRef(id).get();
   if (!snap.exists) return null;
   const report = fromDoc<WorkReport>(snap);
-  if (report.organizationId !== org()) return null;
+  if (report.organizationId !== org() || report.deletedAt) return null;
   const canEdit = report.userId === actor.uid && editable(report.status);
   const canReview = report.userId !== actor.uid && await canReviewReport(actor, report);
   if (report.userId !== actor.uid && !canReview) return null;
@@ -208,6 +210,35 @@ export async function deleteWorkReportEntry(actor: Actor, reportId: string, entr
     tx.delete(entryRef);
     tx.update(ref, { updatedAt: now() });
     writeAudit(tx, { actorUserId: actor.uid, action: "work_report.entry_deleted", resourceType: "workReport", resourceId: reportId, subjectUserIds: [actor.uid], workspaceId: report.workspaceId, before: { entryId }, requestId });
+  });
+}
+
+/** Soft-delete a user's editable report; submitted/approved evidence remains locked. */
+export async function deleteWorkReport(actor: Actor, reportId: string, requestId: string) {
+  const ref = reportRef(reportId);
+  await adminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw notFound("Work report not found.");
+    const report = fromDoc<WorkReport>(snap);
+    if (report.organizationId !== org()) throw notFound("Work report not found.");
+    await requireAuthor(actor, report, true);
+    if (report.deletedAt) return;
+    tx.update(ref, { deletedAt: now(), updatedAt: now() });
+    writeAudit(tx, { actorUserId: actor.uid, action: "work_report.deleted", resourceType: "workReport", resourceId: reportId, subjectUserIds: [actor.uid], workspaceId: report.workspaceId, before: { status: report.status, reportDate: report.reportDate }, after: { deletedAt: "deleted" }, requestId });
+  });
+}
+
+export async function restoreWorkReport(actor: Actor, reportId: string, requestId: string) {
+  const ref = reportRef(reportId);
+  await adminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw notFound("Work report not found.");
+    const report = fromDoc<WorkReport>(snap);
+    if (report.organizationId !== org()) throw notFound("Work report not found.");
+    await requireAuthor(actor, report, true);
+    if (!report.deletedAt) return;
+    tx.update(ref, { deletedAt: null, updatedAt: now() });
+    writeAudit(tx, { actorUserId: actor.uid, action: "work_report.restored", resourceType: "workReport", resourceId: reportId, subjectUserIds: [actor.uid], workspaceId: report.workspaceId, before: { deletedAt: "deleted" }, after: { deletedAt: null }, requestId });
   });
 }
 

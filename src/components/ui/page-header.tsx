@@ -11,7 +11,7 @@ import { cn } from "@/lib/cn";
  */
 export function PageHeader({ eyebrow, title, description, actions, meta, icon, className }: { eyebrow?: string; title: ReactNode; description?: ReactNode; actions?: ReactNode; meta?: ReactNode; icon?: ReactNode; className?: string }) {
   return (
-    <header className={cn("flex flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between", className)}>
+    <header className={cn("flex min-w-0 flex-col gap-4 border-b border-line pb-5 md:flex-row md:items-end md:justify-between", className)}>
       <div className="flex min-w-0 items-start gap-4">
         {icon ? (
           <WiggleIcon className="icon-tile mt-1 hidden size-12 shrink-0 sm:inline-grid [&_svg]:size-6">{icon}</WiggleIcon>
@@ -23,7 +23,7 @@ export function PageHeader({ eyebrow, title, description, actions, meta, icon, c
           {meta ? <div className="mt-3 flex flex-wrap items-center gap-2">{meta}</div> : null}
         </div>
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {actions ? <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div> : null}
     </header>
   );
 }

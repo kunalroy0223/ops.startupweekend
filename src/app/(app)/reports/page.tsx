@@ -14,12 +14,14 @@ function todayInTimezone(timeZone: string) {
   return `${values.year}-${values.month}-${values.day}`;
 }
 
-export default async function ReportsPage() {
+export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ deleted?: string }> }) {
   const { actor } = await requireActive();
+  const params = await searchParams;
+  const showDeleted = params.deleted === "1";
   const [mine, reviewQueue, workspaces, structure, organization] = await Promise.all([
-    listMyReports(actor), listReviewQueue(actor), listWorkspaces(actor), listStructure(actor), getOrganization(),
+    listMyReports(actor, showDeleted), listReviewQueue(actor), listWorkspaces(actor), listStructure(actor), getOrganization(),
   ]);
-  return <ReportIndex mine={mine} reviewQueue={reviewQueue} workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
+  return <ReportIndex key={showDeleted ? "deleted" : "active"} mine={mine} reviewQueue={reviewQueue} workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
     teams={structure.teams} workstreams={structure.workstreams} today={todayInTimezone(organization?.timezone ?? "Asia/Kolkata")}
-    canReview={isAdmin(actor) || actor.role === "lead"} adminView={isAdmin(actor)} />;
+    canReview={isAdmin(actor) || actor.role === "lead"} adminView={isAdmin(actor)} showDeleted={showDeleted} />;
 }

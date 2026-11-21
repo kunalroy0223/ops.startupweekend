@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, FileText, MessageSquare, Save, Send } from "lucide-react";
+import { ArrowLeft, ExternalLink, FileText, MessageSquare, Save, Send, Trash2 } from "lucide-react";
 import type { Project, Task, TaskComment, TaskPriority, TaskStatus } from "@/domain/types";
 import type { PublicUser, ScopeSummary } from "@/server/queries";
 import type { TaskActivityItem } from "@/server/services/task-collaboration";
@@ -12,14 +12,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button, LinkButton } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/field";
 import { PageHeader, Panel, SectionHeading } from "@/components/ui/page-header";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { dateTimeInputInTimeZone, dateTimeToIso, formatDateTimeInTimeZone } from "@/lib/timezone";
 
 const priorities: TaskPriority[] = ["low", "medium", "high", "urgent"];
 const label = (value: string) => value.replaceAll("_", " ").replace(/\b\w/g, c => c.toUpperCase());
 const TASK_TONES = { backlog: "neutral", assigned: "info", in_progress: "accent", in_review: "warning", completed: "success", blocked: "danger", cancelled: "neutral" } as const;
 const tone = (status: TaskStatus) => TASK_TONES[status];
-export function TaskDetailWorkspace({ task, comments, activity, people, canManage, canUpdateStatus, availableTasks, projects, teams, workstreams, timeZone }: {
-  task: Task; comments: (TaskComment & { authorName?: string })[]; activity: TaskActivityItem[]; people: PublicUser[]; canManage: boolean; canUpdateStatus: boolean; availableTasks: Task[]; projects: Project[]; teams: ScopeSummary[]; workstreams: ScopeSummary[]; timeZone: string;
+export function TaskDetailWorkspace({ currentUserId, task, comments, activity, people, canManage, canUpdateStatus, availableTasks, projects, teams, workstreams, timeZone }: {
+  currentUserId: string; task: Task; comments: (TaskComment & { authorName?: string })[]; activity: TaskActivityItem[]; people: PublicUser[]; canManage: boolean; canUpdateStatus: boolean; availableTasks: Task[]; projects: Project[]; teams: ScopeSummary[]; workstreams: ScopeSummary[]; timeZone: string;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -42,6 +43,8 @@ export function TaskDetailWorkspace({ task, comments, activity, people, canManag
   const [mentionIds, setMentionIds] = useState<string[]>([]);
   const [nextStatus, setNextStatus] = useState<TaskStatus>(task.status);
   const [reason, setReason] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [commentToDelete, setCommentToDelete] = useState<TaskComment | null>(null);
 
   const ownerName = people.find(p => p.uid === task.accountableUserId)?.displayName ?? "Assigned user";
   const needsReason = nextStatus === "cancelled" || task.status === "completed" || task.status === "cancelled";
@@ -84,6 +87,27 @@ export function TaskDetailWorkspace({ task, comments, activity, people, canManag
     finally { setBusy(false); }
   }
 
+  async function deleteTask() {
+    setBusy(true); setError("");
+    try {
+      await api(`/api/tasks/${task.id}`, { method: "DELETE" });
+      router.push("/tasks");
+      router.refresh();
+    } catch (err) { setError(err instanceof ApiClientError ? err.message : "Unable to delete task."); }
+    finally { setBusy(false); }
+  }
+
+  async function deleteSelectedComment() {
+    if (!commentToDelete) return;
+    setBusy(true); setError("");
+    try {
+      await api(`/api/tasks/${task.id}/comments/${commentToDelete.id}`, { method: "DELETE" });
+      setCommentToDelete(null);
+      router.refresh();
+    } catch (err) { setError(err instanceof ApiClientError ? err.message : "Unable to delete comment."); }
+    finally { setBusy(false); }
+  }
+
   async function addComment(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); setError("");
     try { await api(`/api/tasks/${task.id}/comments`, { method: "POST", body: { body: comment, mentionedUserIds: mentionIds } }); setComment(""); setMentionIds([]); router.refresh(); }
@@ -94,7 +118,7 @@ export function TaskDetailWorkspace({ task, comments, activity, people, canManag
 
   return <div className="space-y-6">
     <PageHeader eyebrow="TASK DETAIL" title={task.title} description={task.description || "Task context and delivery details."} icon={<FileText />}
-      actions={<LinkButton href="/tasks" icon={<ArrowLeft />}>All tasks</LinkButton>}
+      actions={<div className="flex flex-wrap gap-2"><LinkButton href="/tasks" icon={<ArrowLeft />}>All tasks</LinkButton>{canManage ? <Button variant="danger" icon={<Trash2 />} onClick={() => setConfirmDelete(true)}>Delete task</Button> : null}</div>}
       meta={<><Badge tone={tone(task.status)}>{label(task.status)}</Badge><Badge tone={task.priority === "urgent" ? "danger" : task.priority === "high" ? "warning" : "neutral"}>{label(task.priority)} priority</Badge><Badge>{ownerName}</Badge></>} />
     {error ? <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
     <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(280px,0.8fr)]">
@@ -134,7 +158,7 @@ export function TaskDetailWorkspace({ task, comments, activity, people, canManag
 
 
         <Panel><SectionHeading title="Comments" count={comments.length} icon={<MessageSquare />} />
-          <div className="space-y-3">{comments.length ? comments.map(c=><article key={c.id} className="rounded-lg border border-line p-3"><div className="flex justify-between gap-3"><p className="text-sm font-semibold">{c.authorName ?? (c.authorUserId===task.createdBy?"Task creator":"Teammate")}</p><time className="text-xs text-fg-3">{new Date(c.createdAt).toLocaleString("en-IN")}</time></div><p className="mt-2 whitespace-pre-wrap text-sm">{c.body}</p>{c.mentionedUserIds.length?<p className="mt-2 text-xs text-fg-3">Mentioned: {c.mentionedUserIds.map(id=>people.find(p=>p.uid===id)?.displayName??"Teammate").join(", ")}</p>:null}</article>) : <p className="text-sm text-fg-3">No comments yet.</p>}</div>
+          <div className="space-y-3">{comments.length ? comments.map(c=><article key={c.id} className="rounded-lg border border-line p-3"><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-sm font-semibold">{c.authorName ?? (c.authorUserId===task.createdBy?"Task creator":"Teammate")}</p><time className="text-xs text-fg-3">{new Date(c.createdAt).toLocaleString("en-IN")}</time></div>{c.authorUserId === currentUserId || canManage ? <Button size="sm" variant="ghost" className="shrink-0 text-danger" icon={<Trash2 />} onClick={() => setCommentToDelete(c)} aria-label="Delete comment" /> : null}</div><p className="mt-2 whitespace-pre-wrap text-sm">{c.body}</p>{c.mentionedUserIds.length?<p className="mt-2 text-xs text-fg-3">Mentioned: {c.mentionedUserIds.map(id=>people.find(p=>p.uid===id)?.displayName??"Teammate").join(", ")}</p>:null}</article>) : <p className="text-sm text-fg-3">No comments yet.</p>}</div>
           <form onSubmit={addComment} className="mt-4 grid gap-3 border-t border-line pt-4"><label className="grid gap-1.5 text-[13px] font-semibold">Add a comment<Textarea required minLength={1} maxLength={5000} rows={3} value={comment} onChange={e=>setComment(e.target.value)} placeholder="Share an update or ask a question." /></label><div><p className="mb-2 text-xs font-semibold text-fg-2">Mention people with task access</p><div className="grid gap-1 sm:grid-cols-2">{people.filter(p=>p.status==="active"&&p.uid!==task.createdBy).map(p=><label key={p.uid} className="flex items-center gap-2 text-xs text-fg-2"><input type="checkbox" checked={mentionIds.includes(p.uid)} onChange={e=>setMentionIds(old=>e.target.checked?[...old,p.uid]:old.filter(id=>id!==p.uid))}/>{p.displayName}</label>)}</div></div><div className="flex justify-end"><Button type="submit" loading={busy} icon={<Send />}>Post comment</Button></div></form>
         </Panel>
       </div>
@@ -144,5 +168,7 @@ export function TaskDetailWorkspace({ task, comments, activity, people, canManag
         <Panel><SectionHeading title="Task links" /><div className="grid gap-2 text-sm"><Link href="/tasks" className="font-semibold text-accent-text hover:underline">Back to task register</Link><Link href="/projects" className="font-semibold text-accent-text hover:underline">Open projects</Link><Link href="/reports" className="font-semibold text-accent-text hover:underline">Open work reports</Link></div></Panel>
       </div>
     </div>
+    <ConfirmDialog open={!!commentToDelete} onClose={() => !busy && setCommentToDelete(null)} onConfirm={deleteSelectedComment} loading={busy} error={error} tone="danger" title="Delete this comment?" confirmLabel="Delete comment" consequence="The comment will be removed from the task discussion. Its deletion remains recorded in the task activity and audit history." />
+    <ConfirmDialog open={confirmDelete} onClose={() => !busy && setConfirmDelete(false)} onConfirm={deleteTask} loading={busy} error={error} tone="danger" title={`Delete ${task.title}?`} confirmLabel="Delete task" consequence="The task will be removed from active task views while its activity and audit history are preserved. Active subtasks or dependent tasks must be unlinked first." />
   </div>;
 }

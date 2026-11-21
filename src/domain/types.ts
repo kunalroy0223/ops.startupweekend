@@ -273,6 +273,7 @@ export interface TaskComment {
   body: string;
   mentionedUserIds: string[];
   createdAt: string;
+  deletedAt?: string;
 }
 
 
@@ -294,6 +295,7 @@ export interface WorkReport {
   createdAt: string;
   updatedAt: string;
   version: number;
+  deletedAt?: string;
 }
 
 export interface WorkReportEntry {

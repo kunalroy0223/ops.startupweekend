@@ -26,7 +26,7 @@ async function assertTaskRelationships(actor: Actor, taskId: string | undefined,
       if (seen.has(cursor)) throw conflict("existing_parent_cycle", "The selected parent already has a circular relationship.");
       seen.add(cursor);
       const snap: DocumentSnapshot = await col("tasks").doc(cursor).get();
-      if (!snap.exists || snap.data()?.workspaceId !== workspaceId) throw new ApiError(422, "invalid_parent", "Choose a parent task in this workspace.");
+      if (!snap.exists || snap.data()?.workspaceId !== workspaceId || snap.data()?.archivedAt != null) throw new ApiError(422, "invalid_parent", "Choose an active parent task in this workspace.");
       const parent: Task = fromDoc<Task>(snap);
       if (!await canAccessTask(actor, parent)) throw forbidden("The selected parent task is outside your permitted scope.");
       cursor = parent.parentTaskId;
@@ -37,7 +37,7 @@ async function assertTaskRelationships(actor: Actor, taskId: string | undefined,
   for (const dependencyId of unique) {
     if (dependencyId === taskId) throw new ApiError(422, "task_dependency_cycle", "A task cannot depend on itself.");
     const dependency = await col("tasks").doc(dependencyId).get();
-    if (!dependency.exists || dependency.data()?.workspaceId !== workspaceId) throw new ApiError(422, "invalid_dependency", "Every dependency must be an existing task in the same workspace.");
+    if (!dependency.exists || dependency.data()?.workspaceId !== workspaceId || dependency.data()?.archivedAt != null) throw new ApiError(422, "invalid_dependency", "Every dependency must be an active task in the same workspace.");
     if (!await canAccessTask(actor, fromDoc<Task>(dependency))) throw forbidden("A dependency is outside your permitted scope.");
     const pending = [dependencyId];
     const visited = new Set<string>();
@@ -86,9 +86,9 @@ async function assertTaskScope(actor: Actor, workspaceId: string, teamId?: strin
   if (workstreamId && !scope.leadWorkstreamIds.has(workstreamId)) throw forbidden("This workstream is outside your assigned scope.");
 }
 
-export async function listProjects(actor: Actor): Promise<Project[]> {
-  const snap = await col("projects").where("organizationId", "==", org()).where("status", "==", "active").get();
-  const rows = snap.docs.map((d) => fromDoc<Project>(d));
+export async function listProjects(actor: Actor, includeArchived = false): Promise<Project[]> {
+  const snap = await col("projects").where("organizationId", "==", org()).get();
+  const rows = snap.docs.map((d) => fromDoc<Project>(d)).filter((project) => includeArchived ? project.status === "archived" : project.status === "active");
   if (isAdmin(actor)) return rows.sort((a,b) => a.name.localeCompare(b.name));
   const scope = await getScope(actor.uid);
   return rows.filter((p) => {
@@ -164,11 +164,76 @@ export async function setProjectArchived(actor: Actor, id: string, archived: boo
   });
 }
 
-export async function listTasks(actor: Actor): Promise<Task[]> {
-  const snap = await col("tasks").where("organizationId", "==", org()).where("archivedAt", "==", null).limit(500).get();
-  const rows = snap.docs.map((d) => fromDoc<Task>(d));
-  const visible = await Promise.all(rows.map(async (t) => await canAccessTask(actor, t) ? t : null));
-  return visible.filter((x): x is Task => !!x).sort((a,b) => {
+/** Soft-delete a task from active work views while preserving its audit trail. */
+export async function deleteTask(actor: Actor, id: string, requestId: string) {
+  const ref = col("tasks").doc(id);
+  const snap = await ref.get();
+  if (!snap.exists) throw notFound("Task not found.");
+  const task = fromDoc<Task>(snap);
+  if (!await canAccessTask(actor, task)) throw forbidden();
+  if (!isAdmin(actor) && actor.role !== "lead") throw forbidden("Only Admins and Leads can delete tasks.");
+  await assertTaskScope(actor, task.workspaceId, task.teamId, task.workstreamId);
+  if (task.archivedAt) return;
+
+  await adminDb().runTransaction(async (tx) => {
+    const current = await tx.get(ref);
+    if (!current.exists) throw notFound("Task not found.");
+    const latest = fromDoc<Task>(current);
+    if (latest.archivedAt) return;
+    if (!await canAccessTask(actor, latest)) throw forbidden();
+    const [children, dependents] = await Promise.all([
+      tx.get(col("tasks").where("parentTaskId", "==", id).limit(100)),
+      tx.get(col("tasks").where("dependencyIds", "array-contains", id).limit(100)),
+    ]);
+    const hasActiveRelationship = [...children.docs, ...dependents.docs].some((doc) =>
+      doc.data().organizationId === org() && doc.data().archivedAt == null,
+    );
+    if (hasActiveRelationship) {
+      throw conflict("task_has_dependencies", "This task is linked to active subtasks or dependent tasks. Remove or reassign those relationships before deleting it.");
+    }
+    tx.update(ref, { archivedAt: now(), updatedBy: actor.uid, updatedAt: now() });
+    recordTaskActivity(tx, id, actor.uid, "deleted", `${actor.displayName} deleted this task`);
+    writeAudit(tx, { actorUserId: actor.uid, action: "task.deleted", resourceType: "task", resourceId: id, subjectUserIds: [latest.accountableUserId, ...latest.collaboratorUserIds], workspaceId: latest.workspaceId, before: { title: latest.title, status: latest.status }, after: { archivedAt: "deleted" }, requestId });
+  });
+}
+
+export async function restoreTask(actor: Actor, id: string, requestId: string) {
+  const ref = col("tasks").doc(id);
+  await adminDb().runTransaction(async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists) throw notFound("Task not found.");
+    const task = fromDoc<Task>(snap);
+    if (!await canAccessTask(actor, task)) throw forbidden();
+    if (!isAdmin(actor) && actor.role !== "lead") throw forbidden("Only Admins and Leads can restore tasks.");
+    await assertTaskScope(actor, task.workspaceId, task.teamId, task.workstreamId);
+    if (!task.archivedAt) return;
+    await assertTaskRelationships(actor, id, task.workspaceId, task.parentTaskId, task.dependencyIds);
+    tx.update(ref, { archivedAt: null, updatedBy: actor.uid, updatedAt: now() });
+    recordTaskActivity(tx, id, actor.uid, "restored", `${actor.displayName} restored this task`);
+    writeAudit(tx, { actorUserId: actor.uid, action: "task.restored", resourceType: "task", resourceId: id, subjectUserIds: [task.accountableUserId, ...task.collaboratorUserIds], workspaceId: task.workspaceId, before: { archivedAt: "deleted" }, after: { archivedAt: null }, requestId });
+  });
+}
+
+export async function listTasks(actor: Actor, includeArchived = false): Promise<Task[]> {
+  let query = col("tasks").where("organizationId", "==", org());
+  if (!includeArchived) query = query.where("archivedAt", "==", null);
+  const snap = await query.limit(500).get();
+  const rows = snap.docs.map((d) => fromDoc<Task>(d)).filter((task) => includeArchived ? !!task.archivedAt : !task.archivedAt);
+  const scope = isAdmin(actor) ? null : await getScope(actor.uid);
+  const visible = rows.filter((task) => {
+    if (task.organizationId !== org()) return false;
+    if (isAdmin(actor)) return true;
+    if (!scope) return false;
+    if (actor.role === "lead") {
+      if (!task.teamId && !task.workstreamId) return false;
+      return scope.workspaceIds.has(task.workspaceId) &&
+        (!task.teamId || scope.leadTeamIds.has(task.teamId) || scope.teamIdsViaLedWorkstreams.has(task.teamId)) &&
+        (!task.workstreamId || scope.leadWorkstreamIds.has(task.workstreamId));
+    }
+    if (task.accountableUserId === actor.uid || task.collaboratorUserIds.includes(actor.uid)) return true;
+    return !!task.teamId && scope.memberTeamIds.has(task.teamId);
+  });
+  return visible.sort((a,b) => {
     const da = a.dueAt ? Date.parse(a.dueAt) : Number.MAX_SAFE_INTEGER;
     const db = b.dueAt ? Date.parse(b.dueAt) : Number.MAX_SAFE_INTEGER;
     return da - db || b.updatedAt.localeCompare(a.updatedAt);
@@ -256,6 +321,7 @@ export async function changeTaskStatus(actor: Actor, id: string, next: TaskStatu
     const snap = await tx.get(ref);
     if (!snap.exists) throw notFound("Task not found.");
     const task = fromDoc<Task>(snap);
+    if (task.archivedAt) throw conflict("task_deleted", "Restore this task before changing its status.");
     if (!await canAccessTask(actor, task)) throw forbidden();
     const manager = isAdmin(actor) || actor.role === "lead";
     const memberOwn = actor.role === "member" && task.accountableUserId === actor.uid;
@@ -282,6 +348,7 @@ export async function updateTask(actor: Actor, id: string, input: Record<string,
     const snap = await tx.get(ref);
     if (!snap.exists) throw notFound("Task not found.");
     const task = fromDoc<Task>(snap);
+    if (task.archivedAt) throw conflict("task_deleted", "Restore this task before editing it.");
     if (!await canAccessTask(actor, task)) throw forbidden();
     const manager = isAdmin(actor) || actor.role === "lead";
     if (!manager) throw forbidden("Only Admins and Leads can change task details.");
