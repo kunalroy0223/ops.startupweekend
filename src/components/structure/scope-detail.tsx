@@ -1,4 +1,4 @@
-import { Link2, Network, Shield, Sparkles, UserPlus, Users, UsersRound } from "lucide-react";
+import { Link2, Network, Shield, UserPlus, Users, UsersRound } from "lucide-react";
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
 import { ArchivedBadge, Badge, RoleBadge, UserStatusBadge } from "@/components/ui/badge";
@@ -91,10 +91,6 @@ export function ScopeDetailView({ detail, canManage, people, allWorkstreams, tz 
             ) : (
               <p className="text-[13px] text-fg-2">{s.kind === "team" ? "Not linked to a workstream." : "No teams linked yet. Link teams from the team's page."}</p>
             )}
-          </Panel>
-          <Panel>
-            <SectionHeading icon={<Sparkles />} title="Coming next" />
-            <p className="text-[13px] text-fg-2">Projects, tasks and work reports for this {s.kind} arrive with Modules 2 and 3.</p>
           </Panel>
         </aside>
       </div>
