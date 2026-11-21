@@ -1,6 +1,6 @@
 import "server-only";
 import { FieldValue, type QueryDocumentSnapshot } from "firebase-admin/firestore";
-import type { AutomationRule, AutomationRun, Task, UserProfile } from "@/domain/types";
+import type { AutomationRule, AutomationRun, CrmCampaign, CrmCampaignMember, CrmContact, Task, UserProfile } from "@/domain/types";
 import {
   automationRuleDocumentId,
   dueSoonOccurrenceKey,
@@ -11,7 +11,8 @@ import {
   type AutomationRunIdentity,
 } from "@/domain/automation";
 import { nextRetryDelayMs } from "@/domain/events";
-import { col, fromDoc, now } from "../db";
+import { crmFollowUpOccurrenceKey, crmReplyWaitingOccurrenceKey, isCrmFollowUpDue, isCrmReplyWaiting, CRM_CAMPAIGN_MEMBER_TERMINAL_STAGES } from "@/domain/crm-workflows";
+import { col, fromDoc, now, tsFromMs } from "../db";
 import { adminDb } from "../firebase-admin";
 import { serverEnv } from "../env";
 import { AUTOMATION_RULES, isAutomationRuleKey, isAutomationRuleExecutable, validateAutomationRuleConfig, type AutomationRuleKey } from "./registry";
@@ -22,7 +23,8 @@ const ALREADY_EXISTS = 6;
 const isAlreadyExists = (error: unknown) => (error as { code?: number })?.code === ALREADY_EXISTS;
 const org = () => serverEnv().ORGANIZATION_ID;
 
-type RuleRow = AutomationRule & { ruleKey: AutomationRuleKey };
+type RuleRow = AutomationRule & { ruleKey: string };
+type StoredAutomationRule = AutomationRule & { ruleKey: AutomationRuleKey };
 export interface AutomationProcessSummary {
   scanned: number;
   claimed: number;
@@ -123,6 +125,118 @@ async function executeTaskRun(run: AutomationRun, rule: RuleRow): Promise<"compl
   }
 }
 
+async function executeCrmCampaignMemberRun(run: AutomationRun, rule: RuleRow): Promise<"completed" | "skipped" | "retry" | "failed"> {
+  try {
+    const [memberSnap, userSnap, ruleSnap] = await Promise.all([
+      col("crmCampaignMembers").doc(run.targetId).get(),
+      col("users").doc(run.recipientUserId).get(),
+      col("automationRules").doc(run.ruleId).get(),
+    ]);
+    if (!ruleSnap.exists || ruleSnap.data()?.enabled !== true) {
+      await markSkipped(run, "rule_disabled");
+      return "skipped";
+    }
+    if (!memberSnap.exists) {
+      await markSkipped(run, "crm_campaign_member_missing");
+      return "skipped";
+    }
+    const member = fromDoc<CrmCampaignMember>(memberSnap);
+    const [campaignSnap, contactSnap] = await Promise.all([
+      col("crmCampaigns").doc(member.campaignId).get(),
+      col("crmContacts").doc(member.contactId).get(),
+    ]);
+    const user = userSnap.exists ? fromDoc<UserProfile>(userSnap, "uid") : null;
+    if (!campaignSnap.exists || !contactSnap.exists) {
+      await markSkipped(run, "crm_campaign_or_contact_missing");
+      return "skipped";
+    }
+    const campaign = fromDoc<CrmCampaign>(campaignSnap);
+    const contact = fromDoc<CrmContact>(contactSnap);
+    if (member.organizationId !== org() || member.assignedToUserId !== run.recipientUserId || campaign.organizationId !== org() || campaign.status !== "active" || contact.organizationId !== org() || contact.status !== "active" || contact.doNotContact) {
+      await markSkipped(run, "crm_target_no_longer_eligible");
+      return "skipped";
+    }
+    if (!user || user.organizationId !== org() || user.status !== "active") {
+      await markSkipped(run, "recipient_inactive");
+      return "skipped";
+    }
+    const config = validateAutomationRuleConfig(run.ruleKey, rule.config);
+    const nowMs = Date.now();
+    let eventType: "CRM_FOLLOW_UP_DUE" | "CRM_REPLY_WAITING";
+    if (run.ruleKey === "crm_follow_up_due") {
+      const dueAt = member.nextFollowUpAt;
+      if (!dueAt || CRM_CAMPAIGN_MEMBER_TERMINAL_STAGES.has(member.stage) || !isCrmFollowUpDue(dueAt, nowMs) || crmFollowUpOccurrenceKey(dueAt, nowMs, Number(config.repeatHours)) !== run.occurrenceKey) {
+        await markSkipped(run, "crm_follow_up_no_longer_due");
+        return "skipped";
+      }
+      eventType = "CRM_FOLLOW_UP_DUE";
+    } else if (run.ruleKey === "crm_reply_waiting") {
+      const lastInteractionAt = member.lastInteractionAt;
+      const waitHours = Number(config.waitHours);
+      if (!isCrmReplyWaiting(member.stage, lastInteractionAt, nowMs, waitHours) || crmReplyWaitingOccurrenceKey(lastInteractionAt!, nowMs, waitHours) !== run.occurrenceKey) {
+        await markSkipped(run, "crm_reply_no_longer_waiting");
+        return "skipped";
+      }
+      eventType = "CRM_REPLY_WAITING";
+    } else {
+      await markSkipped(run, "crm_rule_mismatch");
+      return "skipped";
+    }
+    const eventId = `automation_${run.id}`;
+    const eventRef = col("domainEvents").doc(eventId);
+    try {
+      await eventRef.create({
+        organizationId: org(),
+        eventType,
+        resourceType: "crmCampaignMember",
+        resourceId: member.id,
+        workspaceId: member.workspaceId,
+        payload: { userId: member.assignedToUserId, campaignMemberId: member.id, campaignId: campaign.id, contactId: contact.id, waitHours: run.ruleKey === "crm_reply_waiting" ? Number(config.waitHours) : null, automationRunId: run.id },
+        status: "pending",
+        attempts: 0,
+        createdAt: now(),
+      });
+    } catch (error) {
+      if (!isAlreadyExists(error)) throw error;
+    }
+    await finishAutomationRun(run.id, run.attempts, { status: "completed", domainEventId: eventId });
+    return "completed";
+  } catch (error) {
+    return finishWithRetry(run, error);
+  }
+}
+
+async function processCrmOccurrence(identity: AutomationRunIdentity, rule: RuleRow, summary: AutomationProcessSummary): Promise<void> {
+  bump(summary, "scanned");
+  const run = await claimAutomationRun(identity);
+  if (!run) return;
+  bump(summary, "claimed");
+  const outcome = await executeCrmCampaignMemberRun(run, rule);
+  bump(summary, outcome);
+}
+
+async function queryCrmCandidates(rule: RuleRow, limit: number): Promise<{ docs: QueryDocumentSnapshot[]; hasMore: boolean }> {
+  const pageSize = Math.min(Math.max(limit, 1), MAX_SCAN);
+  let query = col("crmCampaignMembers").where("organizationId", "==", org());
+  let cursorId: string | undefined;
+  if (rule.ruleKey === "crm_follow_up_due") {
+    query = query.where("nextFollowUpAt", "<=", now()).orderBy("nextFollowUpAt", "asc");
+    cursorId = rule.crmFollowUpCursorMemberId;
+  } else if (rule.ruleKey === "crm_reply_waiting") {
+    const waitHours = Number(rule.config.waitHours);
+    query = query.where("stage", "==", "replied").where("lastInteractionAt", "<=", tsFromMs(Date.now() - waitHours * 60 * 60_000)).orderBy("lastInteractionAt", "asc");
+    cursorId = rule.crmReplyWaitingCursorMemberId;
+  } else {
+    return { docs: [], hasMore: false };
+  }
+  if (cursorId) {
+    const cursor = await col("crmCampaignMembers").doc(cursorId).get();
+    if (cursor.exists) query = query.startAfter(cursor);
+  }
+  const snap = await query.limit(pageSize + 1).get();
+  return { docs: snap.docs.slice(0, pageSize), hasMore: snap.docs.length > pageSize };
+}
+
 async function processOccurrence(
   identity: AutomationRunIdentity,
   rule: RuleRow,
@@ -165,18 +279,36 @@ async function processRule(rule: RuleRow, limit: number, summary: AutomationProc
     bump(summary, "unsupportedRules");
     return;
   }
+  if (rule.ruleKey === "crm_follow_up_due" || rule.ruleKey === "crm_reply_waiting") {
+    const page = await queryCrmCandidates(rule, limit);
+    for (const doc of page.docs) {
+      const member = fromDoc<CrmCampaignMember>(doc);
+      if (!member.assignedToUserId || member.organizationId !== org()) continue;
+      const occurrenceKey = rule.ruleKey === "crm_follow_up_due"
+        ? (member.nextFollowUpAt ? crmFollowUpOccurrenceKey(member.nextFollowUpAt, Date.now(), Number(rule.config.repeatHours)) : "")
+        : (member.lastInteractionAt ? crmReplyWaitingOccurrenceKey(member.lastInteractionAt, Date.now(), Number(rule.config.waitHours)) : "");
+      if (!occurrenceKey) continue;
+      await processCrmOccurrence({
+        ruleId: rule.id,
+        ruleKey: rule.ruleKey,
+        targetType: "crmCampaignMember",
+        targetId: member.id,
+        recipientUserId: member.assignedToUserId,
+        occurrenceKey,
+        workspaceId: member.workspaceId,
+      }, rule, summary);
+    }
+    const last = page.docs.at(-1);
+    const cursorField = rule.ruleKey === "crm_follow_up_due" ? "crmFollowUpCursorMemberId" : "crmReplyWaitingCursorMemberId";
+    await col("automationRules").doc(rule.id).update({ [cursorField]: page.hasMore && last ? last.id : FieldValue.delete() });
+    return;
+  }
+
   const page = await queryTaskCandidates(rule, limit);
   for (const doc of page.docs) {
     const task = fromDoc<Task>(doc);
     if (task.organizationId !== org() || !task.dueAt || !isAutomationTaskOpen(task)) continue;
     if (!task.accountableUserId) continue;
-    const nowMs = Date.now();
-    const matchesWindow = rule.ruleKey === "task_due_soon"
-      ? isTaskDueSoon(task.dueAt, nowMs, Number(rule.config.leadMinutes))
-      : rule.ruleKey === "task_overdue"
-        ? isTaskOverdue(task.dueAt, nowMs)
-        : false;
-    if (!matchesWindow) continue;
     const identity: AutomationRunIdentity = {
       ruleId: rule.id,
       ruleKey: rule.ruleKey,
@@ -202,31 +334,18 @@ async function processRule(rule: RuleRow, limit: number, summary: AutomationProc
 }
 
 async function processDueRetries(limit: number, summary: AutomationProcessSummary): Promise<void> {
-  const organizationId = org();
-  const pageSize = Math.min(Math.max(limit, 1), 100);
-  const [dueRetries, staleProcessing] = await Promise.all([
-    col("automationRuns")
-      .where("organizationId", "==", organizationId)
-      .where("status", "==", "retry")
-      .where("nextRetryAt", "<=", now())
-      .orderBy("nextRetryAt", "asc")
-      .limit(pageSize)
-      .get(),
-    col("automationRuns")
-      .where("organizationId", "==", organizationId)
-      .where("status", "==", "processing")
-      .where("leaseUntil", "<=", now())
-      .orderBy("leaseUntil", "asc")
-      .limit(pageSize)
-      .get(),
-  ]);
-
-  const runs = new Map<string, AutomationRun>();
-  for (const doc of [...dueRetries.docs, ...staleProcessing.docs]) {
-    runs.set(doc.id, fromDoc<AutomationRun>(doc));
-  }
-  for (const existing of runs.values()) {
-    if (existing.targetType !== "task" || !isAutomationRuleKey(existing.ruleKey) || !isAutomationRuleExecutable(existing.ruleKey)) continue;
+  const snap = await col("automationRuns")
+    .where("organizationId", "==", org())
+    .where("status", "==", "retry")
+    .where("nextRetryAt", "<=", now())
+    .orderBy("nextRetryAt", "asc")
+    .limit(Math.min(Math.max(limit, 1), 100))
+    .get();
+  for (const doc of snap.docs) {
+    const existing = fromDoc<AutomationRun>(doc);
+    if (!isAutomationRuleKey(existing.ruleKey) || !isAutomationRuleExecutable(existing.ruleKey)) continue;
+    const expectedTargetType = existing.ruleKey.startsWith("crm_") ? "crmCampaignMember" : "task";
+    if (existing.targetType !== expectedTargetType) continue;
     const ref = col("automationRules").doc(existing.ruleId);
     const ruleSnap = await ref.get();
     if (!ruleSnap.exists || ruleSnap.data()?.enabled !== true) {
@@ -242,7 +361,9 @@ async function processDueRetries(limit: number, summary: AutomationProcessSummar
     const claimed = await claimAutomationRun(existing);
     if (!claimed) continue;
     bump(summary, "claimed");
-    const outcome = await executeTaskRun(claimed, rule);
+    const outcome = expectedTargetType === "task"
+      ? await executeTaskRun(claimed, rule)
+      : await executeCrmCampaignMemberRun(claimed, rule);
     bump(summary, outcome);
   }
 }
@@ -253,7 +374,7 @@ export async function processScheduledAutomations(limit = 250): Promise<Automati
   const rulesSnap = await col("automationRules").where("organizationId", "==", org()).where("enabled", "==", true).get();
   const rules = rulesSnap.docs
     .map((doc) => fromDoc<AutomationRule & { ruleKey: string }>(doc))
-    .filter((rule): rule is AutomationRule & { ruleKey: AutomationRuleKey } => isAutomationRuleKey(rule.ruleKey));
+    .filter((rule): rule is StoredAutomationRule => isAutomationRuleKey(rule.ruleKey));
   for (const stored of rules) {
     const definition = AUTOMATION_RULES[stored.ruleKey];
     const rule = {

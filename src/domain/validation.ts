@@ -289,3 +289,100 @@ export const automationRuleUpdateSchema = z.object({
   enabled: z.boolean(),
   config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])),
 }).strict();
+
+
+
+// ── CRM workflows: partnership pipeline, outreach campaigns and activities ──
+
+export const crmOpportunityCreateSchema = z.object({
+  workspaceId: id,
+  title: z.string().trim().min(2).max(160),
+  opportunityType: z.enum(["sponsorship", "institutional_partnership", "mentor", "speaker", "judge", "community", "collaboration", "other"]),
+  accountId: id.optional(),
+  primaryContactId: id.optional(),
+  ownerUserId: id.optional(),
+  supportingUserIds: z.array(id).max(20).default([]),
+  expectedValue: z.number().finite().min(0).max(1_000_000_000).optional(),
+  currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
+  contributionDescription: z.string().trim().max(2000).optional(),
+  expectedDecisionAt: z.string().datetime().optional(),
+  nextStep: z.string().trim().max(1000).optional(),
+  sourceCampaignId: id.optional(),
+}).strict();
+
+export const crmOpportunityUpdateSchema = z.object({
+  title: z.string().trim().min(2).max(160).optional(),
+  opportunityType: z.enum(["sponsorship", "institutional_partnership", "mentor", "speaker", "judge", "community", "collaboration", "other"]).optional(),
+  accountId: id.nullable().optional(),
+  primaryContactId: id.nullable().optional(),
+  ownerUserId: id.optional(),
+  supportingUserIds: z.array(id).max(20).optional(),
+  expectedValue: z.number().finite().min(0).max(1_000_000_000).nullable().optional(),
+  currency: z.string().trim().regex(/^[A-Z]{3}$/).nullable().optional(),
+  contributionDescription: z.string().trim().max(2000).nullable().optional(),
+  expectedDecisionAt: z.string().datetime().nullable().optional(),
+  nextStep: z.string().trim().max(1000).nullable().optional(),
+  sourceCampaignId: id.nullable().optional(),
+  stageKey: z.enum(["prospecting", "qualified", "discovery", "proposal", "negotiation", "nurture", "won", "lost"]).optional(),
+  outcomeReason: z.string().trim().max(1000).nullable().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const crmCampaignCreateSchema = z.object({
+  workspaceId: id,
+  name: z.string().trim().min(2).max(160),
+  objective: z.string().trim().min(2).max(2000),
+  campaignType: z.enum(["partnership_acquisition", "instagram_outreach", "mentor_acquisition", "community_engagement", "other"]),
+  channel: z.enum(["instagram", "email", "phone", "in_person", "event", "referral", "other"]),
+  ownerUserId: id.optional(),
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  tags: crmTags,
+}).strict().refine((value) => !value.startAt || !value.endAt || Date.parse(value.endAt) >= Date.parse(value.startAt), {
+  message: "Campaign end must be on or after its start.", path: ["endAt"],
+});
+
+export const crmCampaignUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(160).optional(),
+  objective: z.string().trim().min(2).max(2000).optional(),
+  status: z.enum(["draft", "active", "paused", "completed", "archived"]).optional(),
+  startAt: z.string().datetime().nullable().optional(),
+  endAt: z.string().datetime().nullable().optional(),
+  tags: crmTags.optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const crmCampaignMemberCreateSchema = z.object({
+  contactId: id,
+  assignedToUserId: id.optional(),
+}).strict();
+
+export const crmCampaignMemberUpdateSchema = z.object({
+  stage: z.enum(["researched", "qualified", "ready_to_contact", "contacted", "replied", "interested", "converted", "nurture", "not_interested", "do_not_contact"]).optional(),
+  assignedToUserId: id.optional(),
+  nextFollowUpAt: z.string().datetime().nullable().optional(),
+  linkedFollowUpTaskId: id.nullable().optional(),
+  outcomeReason: z.string().trim().max(1000).nullable().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const crmActivityCreateSchema = z.object({
+  campaignMemberId: id.optional(),
+  opportunityId: id.optional(),
+  contactId: id.optional(),
+  accountId: id.optional(),
+  activityType: z.enum(["researched", "qualified", "initial_outreach", "reply_received", "follow_up_sent", "call", "meeting", "proposal_shared", "stage_changed", "outcome_recorded", "note", "correction"]),
+  channel: z.enum(["instagram", "email", "phone", "meeting", "in_person", "internal", "other"]),
+  direction: z.enum(["inbound", "outbound", "internal"]).optional(),
+  occurredAt: z.string().datetime().optional(),
+  summary: z.string().trim().min(2).max(2000),
+  outcome: z.string().trim().max(1000).optional(),
+  correctsActivityId: id.optional(),
+  nextFollowUpAt: z.string().datetime().nullable().optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.campaignMemberId && !value.opportunityId && !value.contactId && !value.accountId) {
+    ctx.addIssue({ code: "custom", path: ["campaignMemberId"], message: "Link this activity to a campaign member, opportunity, contact or account." });
+  }
+  if (value.activityType === "correction" && !value.correctsActivityId) {
+    ctx.addIssue({ code: "custom", path: ["correctsActivityId"], message: "Choose the activity this entry corrects." });
+  }
+});

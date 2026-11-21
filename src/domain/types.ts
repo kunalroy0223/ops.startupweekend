@@ -357,7 +357,7 @@ export interface TaskAttachment {
   createdAt: string;
 }
 
-// ── Module 5: automation and notification digest ──────────────────────────
+// ── Module 4: automation and notification digest ──────────────────────────
 
 export type AutomationRunStatus = "pending" | "processing" | "completed" | "skipped" | "retry" | "failed";
 export type AutomationTriggerType = "domain_event" | "scheduled_query";
@@ -375,8 +375,10 @@ export interface AutomationRule {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
-  /** Internal pagination cursor for the scheduled overdue-task scan. */
+  /** Internal pagination cursors for bounded scheduled-query scans. */
   overdueCursorTaskId?: string;
+  crmFollowUpCursorMemberId?: string;
+  crmReplyWaitingCursorMemberId?: string;
 }
 
 export interface AutomationRun {

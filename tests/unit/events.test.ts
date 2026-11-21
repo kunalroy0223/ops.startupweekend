@@ -23,6 +23,14 @@ describe("notification channel policy", () => {
       expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
     }
   });
+  it("registers CRM follow-up and reply-waiting notifications", () => {
+    for (const type of ["CRM_FOLLOW_UP_DUE", "CRM_REPLY_WAITING"] as const) {
+      expect(EVENT_TYPES).toContain(type);
+      expect(EVENT_CATALOGUE[type].category).toBe("crm");
+      expect(EVENT_CATALOGUE[type].productModule).toBe(9);
+      expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
+    }
+  });
   it("essential events ignore opt-outs", () => {
     const prefs = { ...DEFAULT_PREFERENCES, emailEnabled: false, inAppEnabled: false, deliveryMode: "off" as const, disabledEventTypes: ["USER_ROLE_CHANGED"] };
     expect(resolveChannels("USER_ROLE_CHANGED", prefs)).toEqual({ inApp: true, email: "immediate" });

@@ -43,13 +43,16 @@ describe("Module 5 task reminder automation", () => {
     expect(isAutomationTaskOpen({ status: "in_progress", archivedAt: "2026-11-21T00:00:00.000Z" })).toBe(false);
   });
 
-  it("makes only task reminder rules executable until CRM follow-up workflows exist", () => {
+  it("enables task and CRM reminder rules once CRM follow-up workflows are installed", () => {
     expect(Object.keys(AUTOMATION_RULES)).toEqual(["task_due_soon", "task_overdue", "crm_follow_up_due", "crm_reply_waiting"]);
-    expect(isAutomationRuleExecutable("task_due_soon")).toBe(true);
-    expect(isAutomationRuleExecutable("task_overdue")).toBe(true);
-    expect(isAutomationRuleExecutable("crm_follow_up_due")).toBe(false);
-    expect(isAutomationRuleExecutable("crm_reply_waiting")).toBe(false);
+    for (const ruleKey of ["task_due_soon", "task_overdue", "crm_follow_up_due", "crm_reply_waiting"]) {
+      expect(isAutomationRuleExecutable(ruleKey)).toBe(true);
+    }
     expect(validateAutomationRuleConfig("task_overdue", { repeatHours: 24 })).toEqual({ repeatHours: 24 });
+    expect(validateAutomationRuleConfig("crm_follow_up_due", { repeatHours: 24 })).toEqual({ repeatHours: 24 });
+    expect(validateAutomationRuleConfig("crm_reply_waiting", { waitHours: 24 })).toEqual({ waitHours: 24 });
+    expect(() => validateAutomationRuleConfig("crm_follow_up_due", { repeatHours: 1 })).toThrow();
+    expect(() => validateAutomationRuleConfig("crm_reply_waiting", { waitHours: 2 })).toThrow();
   });
 
   it("registers due and overdue reminder events as optional Module 5 notifications", () => {
