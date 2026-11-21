@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { CrmWorkspace } from "@/components/crm/crm-workspace";
+import { CrmWorkflowNav } from "@/components/crm/crm-workflow-nav";
 import { isAdmin } from "@/domain/authz";
 import type { CrmAccount, CrmContact } from "@/domain/types";
 import { listWorkspaces, pickablePeople } from "@/server/queries";
@@ -29,7 +30,9 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
     : [{ uid: actor.uid, displayName: actor.displayName, email: actor.email }];
 
   return (
-    <CrmWorkspace
+    <div className="grid gap-5">
+      <CrmWorkflowNav active="directory" workspaceId={selectedWorkspace?.id} />
+      <CrmWorkspace
       accounts={accounts}
       contacts={contacts}
       workspaces={workspaces.map((workspace) => ({ id: workspace.id, name: workspace.name }))}
@@ -37,6 +40,7 @@ export default async function CrmPage({ searchParams }: { searchParams: Promise<
       currentUserId={actor.uid}
       role={actor.role}
       people={people}
-    />
+      />
+    </div>
   );
 }

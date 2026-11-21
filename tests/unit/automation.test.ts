@@ -17,6 +17,14 @@ describe("code-owned automation rule registry", () => {
     expect(automationRunDocumentId(identity, "inhub")).not.toBe(automationRunDocumentId({ ...identity, workspaceId: "workspace-2" }, "inhub"));
   });
 
+  it("enables the CRM workflow reminders with bounded configuration", () => {
+    expect(AUTOMATION_RULES.crm_follow_up_due.executionAvailable).toBe(true);
+    expect(AUTOMATION_RULES.crm_reply_waiting.executionAvailable).toBe(true);
+    expect(validateAutomationRuleConfig("crm_follow_up_due", { repeatHours: 24 })).toEqual({ repeatHours: 24 });
+    expect(validateAutomationRuleConfig("crm_reply_waiting", { waitHours: 24 })).toEqual({ waitHours: 24 });
+    expect(() => validateAutomationRuleConfig("crm_follow_up_due", { repeatHours: 1 })).toThrow();
+    expect(() => validateAutomationRuleConfig("crm_reply_waiting", { waitHours: 2 })).toThrow();
+  });
   it("validates bounded rule configuration", () => {
     expect(validateAutomationRuleConfig("task_due_soon", { leadMinutes: 1_440 })).toEqual({ leadMinutes: 1_440 });
     expect(() => validateAutomationRuleConfig("task_due_soon", { leadMinutes: 0 })).toThrow();

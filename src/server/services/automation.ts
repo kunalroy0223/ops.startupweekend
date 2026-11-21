@@ -26,7 +26,7 @@ export async function listAutomationRules(actor: Actor) {
       description: definition.description,
       triggerType: definition.triggerType,
       executionAvailable: definition.executionAvailable,
-      unavailableReason: "unavailableReason" in definition ? definition.unavailableReason : undefined,
+      unavailableReason: "unavailableReason" in definition && typeof definition.unavailableReason === "string" ? definition.unavailableReason : undefined,
       enabled: definition.executionAvailable ? (existing?.enabled ?? false) : false,
       config: existing ? validateAutomationRuleConfig(ruleKey, existing.config) : definition.defaultConfig,
       schemaVersion: existing?.schemaVersion ?? 1,

@@ -427,7 +427,67 @@ const handlers: Record<EventType, EventHandler> = {
   USER_WORKSTREAM_ASSIGNED: assignmentHandler("workstream"),
   TASK_DUE_SOON: taskReminderHandler("due_soon"),
   TASK_OVERDUE: taskReminderHandler("overdue"),
+  CRM_FOLLOW_UP_DUE: crmReminderHandler("follow_up"),
+  CRM_REPLY_WAITING: crmReminderHandler("reply_waiting"),
 };
+
+
+function crmReminderHandler(kind: "follow_up" | "reply_waiting"): EventHandler {
+  return {
+    async resolve(event) {
+      const memberId = String(event.payload.campaignMemberId ?? event.resourceId);
+      const memberSnap = await col("crmCampaignMembers").doc(memberId).get();
+      if (!memberSnap.exists) return [];
+      const member = memberSnap.data()!;
+      if (member.organizationId !== serverEnv().ORGANIZATION_ID || member.assignedToUserId !== event.payload.userId) return [];
+      const toMillis = (value: unknown): number => {
+        if (value && typeof value === "object" && "toMillis" in value && typeof (value as { toMillis?: unknown }).toMillis === "function") {
+          return (value as { toMillis: () => number }).toMillis();
+        }
+        if (value && typeof value === "object" && "toDate" in value && typeof (value as { toDate?: unknown }).toDate === "function") {
+          return (value as { toDate: () => Date }).toDate().getTime();
+        }
+        return Date.parse(String(value ?? ""));
+      };
+      const nowMs = Date.now();
+      if (kind === "follow_up" && (!member.nextFollowUpAt || ["converted", "not_interested", "do_not_contact"].includes(String(member.stage)) || toMillis(member.nextFollowUpAt) > nowMs)) return [];
+      if (kind === "reply_waiting") {
+        const waitHours = Number(event.payload.waitHours);
+        const lastInteractionMs = toMillis(member.lastInteractionAt);
+        if (member.stage !== "replied" || !Number.isFinite(waitHours) || waitHours < 1 || !Number.isFinite(lastInteractionMs) || lastInteractionMs > nowMs - waitHours * 60 * 60_000) return [];
+      }
+      const [user, campaignSnap, contactSnap] = await Promise.all([
+        getUser(member.assignedToUserId),
+        col("crmCampaigns").doc(String(member.campaignId)).get(),
+        col("crmContacts").doc(String(member.contactId)).get(),
+      ]);
+      if (!user || user.status !== "active" || !campaignSnap.exists || !contactSnap.exists) return [];
+      const campaign = campaignSnap.data()!;
+      const contact = contactSnap.data()!;
+      if (campaign.organizationId !== serverEnv().ORGANIZATION_ID || campaign.status !== "active" || contact.organizationId !== serverEnv().ORGANIZATION_ID || contact.status !== "active" || contact.doNotContact === true) return [];
+      const title = String(contact.displayName ?? "CRM contact");
+      const campaignName = String(campaign.name ?? "Campaign");
+      const link = `/crm/workflows?workspaceId=${encodeURIComponent(String(member.workspaceId))}&campaignId=${encodeURIComponent(String(member.campaignId))}&memberId=${encodeURIComponent(memberId)}#${encodeURIComponent(memberId)}`;
+      const isReply = kind === "reply_waiting";
+      const taskId = typeof member.linkedFollowUpTaskId === "string" ? member.linkedFollowUpTaskId : undefined;
+      const body = isReply ? `${title} replied in ${campaignName}. Review the conversation and respond.` : `A follow-up with ${title} is due in ${campaignName}.`;
+      const destination = !isReply && taskId ? `/tasks/${encodeURIComponent(taskId)}` : link;
+      return [{
+        key: user.uid, uid: user.uid, email: user.email,
+        inApp: { title: isReply ? "CRM reply waiting" : "CRM follow-up due", body, actionUrl: destination, resourceType: "crmCampaignMember", resourceId: memberId },
+        compose: async () => ({
+          templateId: isReply ? "crm_reply_waiting" : "crm_follow_up_due",
+          subject: isReply ? `Reply waiting · ${title}` : `Follow-up due · ${title}`,
+          preview: body,
+          eyebrow: "CRM reminder",
+          heading: isReply ? "An inbound reply is waiting for a response." : "A CRM follow-up is due.",
+          paragraphs: [body, `Campaign: ${campaignName}.`],
+          cta: { label: !isReply && taskId ? "Open follow-up task" : "Open CRM workflow", href: appUrl(destination) },
+        }),
+      }];
+    },
+  };
+}
 
 function assignmentHandler(kind: "team" | "workstream"): EventHandler {
   const noun = kind === "team" ? "team" : "workstream";

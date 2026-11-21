@@ -19,7 +19,7 @@ mutation (transaction) ─┬─ business write
                         ├─ auditLogs/{id}
                         └─ domainEvents/{id}  status: pending
                                  │
-             after() on the same request  ·  daily Vercel cron at 09:05 India Standard Time  ·  Admin "Process now"
+             after() on the same request  ·  Vercel cron every 5 min  ·  Admin "Process now"
                                  │
                        processOutbox()  (src/server/notifications/processor.ts)
                                  │ claim event with a lease (transaction: pending|retry → processing, leaseUntil)
@@ -121,7 +121,7 @@ The first executable scheduled rules are `task_due_soon` and `task_overdue`. The
 - The overdue scanner stores a per-rule pagination cursor so a large backlog does not permanently favour the first page.
 - Each run emits a normal domain event. The existing notification processor then applies current channel preferences and recipient eligibility.
 
-The production scheduler in this release is configured for one daily invocation at 09:05 India Standard Time. Use a 24-hour due-soon lead time as the dependable baseline for that cadence. A more frequent reminder cadence requires a deployment scheduler capable of invoking the protected cron route more frequently. The overdue rule rotates through the ordered task set in pages of up to 250 candidates per invocation.
+The production scheduler in this release is configured for one daily invocation. Use a 24-hour due-soon lead time as the dependable baseline for that cadence. A more frequent reminder cadence requires a deployment scheduler capable of invoking the protected cron route more frequently.
 
 ### 10.2 Daily email digests
 
@@ -134,11 +134,16 @@ Non-essential events configured for `daily_digest` create deterministic `notific
 5. Sends a branded email through Resend with a stable idempotency key.
 6. Records `queued`, `sent`, `failed` or `skipped` state, attempts, provider message ID and bounded retry details.
 
-Admins can inspect recent email delivery outcomes in Automation, and retry eligible failed email deliveries. A failed digest can be retried by an Admin from Automation → Daily digest delivery. A retry retains the digest's stable provider idempotency key. Item assignment and digest claiming use transactions and short leases; expired processing leases are recovered by the next scheduled run.
+A failed digest can be retried by an Admin from Automation → Daily digest delivery. A retry retains the digest's stable provider idempotency key.
 
 ### 10.3 Rule availability
 
-Task due and overdue rules are executable. CRM follow-up and CRM reply-waiting rules remain visible but disabled until the CRM workflow persists the required follow-up and inbound-reply lifecycle records. The evaluator never runs unsupported rules.
+Task due and overdue rules are executable. The CRM workflow slice also persists campaign-member follow-up dates and inbound-reply lifecycle records, so `crm_follow_up_due` and `crm_reply_waiting` are executable scheduled-query rules. Both rules revalidate the campaign, contact, assigned recipient and current lifecycle state before creating a domain event. Notifications are suppressed for inactive or do-not-contact contacts, inactive campaigns, inactive recipients and stale reminder occurrences.
+
+- `crm_follow_up_due` scans active campaign members whose `nextFollowUpAt` is due. The default repeat interval is 24 hours; supported configuration is 12–168 hours.
+- `crm_reply_waiting` scans campaign members in the `replied` stage whose latest interaction has exceeded the configured wait threshold. The default wait is 24 hours; supported configuration is 4–168 hours.
+- Both reminder events use the existing notification preferences, outbox, retry and digest infrastructure.
+- The evaluator does not create tasks. A campaign member may optionally link to an existing open task in the same workspace; the follow-up reminder opens that task when a link is present.
 
 ### 10.4 Operations and safeguards
 
@@ -146,5 +151,3 @@ Task due and overdue rules are executable. CRM follow-up and CRM reply-waiting r
 - The cron route requires `Authorization: Bearer $CRON_SECRET` and uses a constant-time comparison.
 - Automation rule mutation, failed-run retry and digest retry are Admin-only and audited.
 - Run and digest IDs are stable across repeated invocations; leases prevent concurrent workers from processing the same item.
-- The evaluator does not create tasks or modify business task state. Its first executable actions are notifications only.
-- CRM follow-up rules are not enabled until their source workflows are complete.

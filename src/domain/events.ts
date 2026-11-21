@@ -21,6 +21,8 @@ export const EVENT_TYPES = [
   "WORK_REPORT_NEEDS_REVISION",
   "TASK_DUE_SOON",
   "TASK_OVERDUE",
+  "CRM_FOLLOW_UP_DUE",
+  "CRM_REPLY_WAITING",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -117,6 +119,22 @@ export const EVENT_CATALOGUE: Record<EventType, EventMeta> = {
     essential: false,
     channels: { inApp: true, email: true },
     productModule: 5,
+  },
+  CRM_FOLLOW_UP_DUE: {
+    label: "CRM follow-up reminders",
+    description: "A contact follow-up assigned to you is due.",
+    category: "crm",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 9,
+  },
+  CRM_REPLY_WAITING: {
+    label: "CRM reply waiting",
+    description: "An inbound CRM reply is awaiting your response.",
+    category: "crm",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 9,
   },
 };
 
