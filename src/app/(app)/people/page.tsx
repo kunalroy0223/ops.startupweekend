@@ -34,7 +34,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const base = new URLSearchParams(Object.entries({ q: query.q, role: query.role, status: query.status }).filter(([, v]) => v) as [string, string][]);
 
   return (
-    <div className="grid min-w-0 gap-8">
+    <div className="box-border grid w-full min-w-0 max-w-full gap-8">
       <PageHeader
         icon={<Users />}
         eyebrow={admin ? "Organisation directory" : actor.role === "lead" ? "People in your scope" : "Your teammates"}
@@ -52,7 +52,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         }
       />
 
-      <section aria-labelledby="directory" className="grid min-w-0 gap-4">
+      <section aria-labelledby="directory" className="grid w-full min-w-0 max-w-full gap-4">
         <h2 id="directory" className="sr-only">Directory</h2>
         <DirectoryFilters q={query.q} role={query.role} status={query.status} />
         {page.users.length ? (
@@ -87,10 +87,10 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                 ))}
               </tbody>
             </Table></div>
-            <ul className="grid min-w-0 gap-2 md:hidden">
+            <ul className="grid w-full min-w-0 max-w-full gap-2 md:hidden">
               {page.users.map((u) => (
-                <li key={u.uid} className="min-w-0">
-                  <Link href={`/people/${u.uid}`} className="group flex min-w-0 w-full items-center gap-3 overflow-hidden rounded-[var(--radius-panel)] border border-line bg-surface p-3 transition-transform active:scale-[0.99]">
+                <li key={u.uid} className="w-full min-w-0 max-w-full">
+                  <Link href={`/people/${u.uid}`} className="group box-border flex w-full min-w-0 max-w-full items-center gap-3 overflow-hidden rounded-[var(--radius-panel)] border border-line bg-surface p-3 transition-transform active:scale-[0.99]">
                     <Avatar name={u.displayName} seed={u.uid} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{u.displayName}</span>
@@ -117,31 +117,62 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
       </section>
 
       {admin ? (
-        <section id="invitations" aria-labelledby="inv-heading" className="scroll-mt-24">
+        <section id="invitations" aria-labelledby="inv-heading" className="scroll-mt-24 w-full min-w-0 max-w-full">
           <SectionHeading icon={<MailPlus />} id="inv-heading" title="Pending invitations" count={invitations.length} />
           {invitations.length ? (
-            <Table caption="Pending invitations">
-              <thead>
-                <tr>
-                  <Th>Email</Th>
-                  <Th>Role</Th>
-                  <Th>Invited by</Th>
-                  <Th>Expires</Th>
-                  <Th className="w-12"><span className="sr-only">Actions</span></Th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="hidden w-full min-w-0 max-w-full md:block">
+                <Table caption="Pending invitations" className="w-full min-w-0 max-w-full">
+                  <thead>
+                    <tr>
+                      <Th>Email</Th>
+                      <Th>Role</Th>
+                      <Th>Invited by</Th>
+                      <Th>Expires</Th>
+                      <Th className="w-12"><span className="sr-only">Actions</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invitations.map((i) => (
+                      <Tr key={i.id}>
+                        <Td className="font-semibold">{i.email}</Td>
+                        <Td>{ROLE_LABEL[i.intendedRole]}</Td>
+                        <Td className="text-fg-2">{i.inviterName} · {relativeTime(i.createdAt)}</Td>
+                        <Td>{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</Td>
+                        <Td><InvitationActions id={i.id} email={i.email} /></Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+              <ul className="grid w-full min-w-0 max-w-full gap-2 md:hidden" aria-label="Pending invitations">
                 {invitations.map((i) => (
-                  <Tr key={i.id}>
-                    <Td className="font-semibold">{i.email}</Td>
-                    <Td>{ROLE_LABEL[i.intendedRole]}</Td>
-                    <Td className="text-fg-2">{i.inviterName} · {relativeTime(i.createdAt)}</Td>
-                    <Td>{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</Td>
-                    <Td><InvitationActions id={i.id} email={i.email} /></Td>
-                  </Tr>
+                  <li key={i.id} className="box-border w-full min-w-0 max-w-full overflow-hidden rounded-[var(--radius-panel)] border border-line bg-surface p-3">
+                    <div className="w-full min-w-0 max-w-full">
+                      <p className="w-full min-w-0 max-w-full break-all text-sm font-semibold [overflow-wrap:anywhere]">{i.email}</p>
+                      <div className="mt-2 flex w-full min-w-0 flex-wrap items-center justify-between gap-2">
+                        <p className="min-w-0 text-xs text-fg-2">{ROLE_LABEL[i.intendedRole]}</p>
+                        <InvitationActions id={i.id} email={i.email} />
+                      </div>
+                    </div>
+                    <dl className="mt-3 grid w-full min-w-0 grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-3 text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-fg-3">Invited by</dt>
+                        <dd className="mt-0.5 break-words [overflow-wrap:anywhere] text-fg-2">{i.inviterName}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-fg-3">Sent</dt>
+                        <dd className="mt-0.5 text-fg-2">{relativeTime(i.createdAt)}</dd>
+                      </div>
+                      <div className="col-span-2 min-w-0">
+                        <dt className="text-fg-3">Expires</dt>
+                        <dd className="mt-0.5">{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</dd>
+                      </div>
+                    </dl>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
+              </ul>
+            </>
           ) : (
             <p className="text-[13px] text-fg-2">No invitations waiting. Accepted, revoked and expired invitations are kept in the activity log.</p>
           )}

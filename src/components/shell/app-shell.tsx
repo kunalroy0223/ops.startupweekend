@@ -56,7 +56,7 @@ export function AppShell({ nav, user, unread, children }: { nav: NavKey[]; user:
   const toggle = () => writeCollapsed(!collapsed);
 
   return (
-    <div className="min-h-dvh min-w-0 overflow-x-clip bg-canvas">
+    <div className="box-border min-h-dvh w-full min-w-0 max-w-full overflow-x-clip bg-canvas">
       {/* Desktop / tablet sidebar */}
       <aside className={cn("fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-line bg-surface md:flex", collapsed ? "w-[72px]" : "w-[72px] lg:w-[248px]")} aria-label="Primary">
         <SidebarBody nav={nav} pathname={pathname} collapsed={collapsed} onToggle={toggle} />
@@ -77,9 +77,9 @@ export function AppShell({ nav, user, unread, children }: { nav: NavKey[]; user:
       ) : null}
       </AnimatePresence>
 
-      <div className={cn("flex min-h-dvh min-w-0 flex-col overflow-x-clip", collapsed ? "md:pl-[72px]" : "md:pl-[72px] lg:pl-[248px]")}>
+      <div className={cn("box-border flex min-h-dvh w-full min-w-0 max-w-full flex-col overflow-x-clip", collapsed ? "md:pl-[72px]" : "md:pl-[72px] lg:pl-[248px]")}>
         <Topbar user={user} unread={unread} pathname={pathname} onMenu={() => setDrawer(true)} showNotifications={nav.includes("notifications")} />
-        <main id="main" className="mx-auto min-w-0 w-full max-w-[1440px] flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
+        <main id="main" className="mx-auto box-border min-w-0 w-full max-w-[1440px] flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
           {children}
         </main>
       </div>
@@ -196,7 +196,7 @@ function Topbar({ user, unread, pathname, onMenu, showNotifications }: { user: S
     router.refresh();
   }
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur-sm sm:px-6 lg:px-10">
+    <header className="sticky top-0 z-20 flex h-16 w-full min-w-0 max-w-full items-center gap-3 border-b border-line bg-surface/95 px-4 backdrop-blur-sm sm:px-6 lg:px-10">
       <button type="button" onClick={onMenu} aria-label="Open navigation" className="-ml-1 grid size-9 place-items-center rounded-md hover:bg-muted md:hidden">
         <MenuIcon className="size-5" />
       </button>
