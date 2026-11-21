@@ -28,6 +28,7 @@ export const CRUMB_LABEL: Record<string, string> = {
   tasks: "Tasks",
   crm: "CRM",
   automation: "Automation",
+  analytics: "Analytics",
   workstreams: "Workstream",
   teams: "Team",
   people: "People",
