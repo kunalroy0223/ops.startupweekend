@@ -120,28 +120,61 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         <section id="invitations" aria-labelledby="inv-heading" className="scroll-mt-24">
           <SectionHeading icon={<MailPlus />} id="inv-heading" title="Pending invitations" count={invitations.length} />
           {invitations.length ? (
-            <Table caption="Pending invitations">
-              <thead>
-                <tr>
-                  <Th>Email</Th>
-                  <Th>Role</Th>
-                  <Th>Invited by</Th>
-                  <Th>Expires</Th>
-                  <Th className="w-12"><span className="sr-only">Actions</span></Th>
-                </tr>
-              </thead>
-              <tbody>
+            <>
+              <div className="hidden min-w-0 max-w-full md:block">
+                <Table caption="Pending invitations" className="w-full min-w-0">
+                  <thead>
+                    <tr>
+                      <Th>Email</Th>
+                      <Th>Role</Th>
+                      <Th>Invited by</Th>
+                      <Th>Expires</Th>
+                      <Th className="w-12"><span className="sr-only">Actions</span></Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {invitations.map((i) => (
+                      <Tr key={i.id}>
+                        <Td className="font-semibold">{i.email}</Td>
+                        <Td>{ROLE_LABEL[i.intendedRole]}</Td>
+                        <Td className="text-fg-2">{i.inviterName} · {relativeTime(i.createdAt)}</Td>
+                        <Td>{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</Td>
+                        <Td><InvitationActions id={i.id} email={i.email} /></Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+              <ul className="grid min-w-0 gap-2 md:hidden" aria-label="Pending invitations">
                 {invitations.map((i) => (
-                  <Tr key={i.id}>
-                    <Td className="font-semibold">{i.email}</Td>
-                    <Td>{ROLE_LABEL[i.intendedRole]}</Td>
-                    <Td className="text-fg-2">{i.inviterName} · {relativeTime(i.createdAt)}</Td>
-                    <Td>{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</Td>
-                    <Td><InvitationActions id={i.id} email={i.email} /></Td>
-                  </Tr>
+                  <li key={i.id} className="min-w-0 rounded-[var(--radius-panel)] border border-line bg-surface p-3">
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="break-all text-sm font-semibold">{i.email}</p>
+                        <p className="mt-1 text-xs text-fg-2">{ROLE_LABEL[i.intendedRole]}</p>
+                      </div>
+                      <div className="shrink-0">
+                        <InvitationActions id={i.id} email={i.email} />
+                      </div>
+                    </div>
+                    <dl className="mt-3 grid min-w-0 grid-cols-2 gap-x-3 gap-y-2 border-t border-line pt-3 text-xs">
+                      <div className="min-w-0">
+                        <dt className="text-fg-3">Invited by</dt>
+                        <dd className="mt-0.5 break-words text-fg-2">{i.inviterName}</dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-fg-3">Sent</dt>
+                        <dd className="mt-0.5 text-fg-2">{relativeTime(i.createdAt)}</dd>
+                      </div>
+                      <div className="col-span-2 min-w-0">
+                        <dt className="text-fg-3">Expires</dt>
+                        <dd className="mt-0.5">{i.expired ? <Badge tone="danger">Expired</Badge> : <span className="text-fg-2">{relativeTime(i.expiresAt)}</span>}</dd>
+                      </div>
+                    </dl>
+                  </li>
                 ))}
-              </tbody>
-            </Table>
+              </ul>
+            </>
           ) : (
             <p className="text-[13px] text-fg-2">No invitations waiting. Accepted, revoked and expired invitations are kept in the activity log.</p>
           )}
