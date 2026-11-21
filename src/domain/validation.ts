@@ -188,6 +188,7 @@ export const workReportEntrySchema = z.object({
   blockers: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
   nextSteps: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
   linkUrls: z.array(safeHttpUrl).max(20).default([]),
+  attachmentIds: z.array(id).max(20).default([]),
 }).strict();
 
 export const workReportReviewSchema = z.object({
@@ -198,3 +199,93 @@ export const workReportReviewSchema = z.object({
     ctx.addIssue({ code: "custom", path: ["comment"], message: "A comment is required when requesting a revision." });
   }
 });
+
+
+export const taskAttachmentCreateSchema = z.object({
+  fileName: z.string().trim().min(1).max(160),
+  contentType: z.string().trim().min(3).max(160),
+  size: z.number().int().positive().max(10 * 1024 * 1024),
+}).strict();
+
+// ── Module 9: CRM account/contact validation ──────────────────────────────
+
+const crmTags = z.array(z.string().trim().min(1).max(40)).max(30).default([]);
+const optionalCrmText = (max: number) => z.string().trim().max(max).optional();
+const optionalCrmUrl = safeHttpUrl.optional();
+
+export const crmAccountCreateSchema = z.object({
+  workspaceId: id,
+  name: z.string().trim().min(2).max(160),
+  accountType: z.enum(["company", "startup", "institution", "investor", "government", "nonprofit", "community", "other"]),
+  industry: optionalCrmText(100),
+  website: optionalCrmUrl,
+  city: optionalCrmText(100),
+  region: optionalCrmText(100),
+  country: optionalCrmText(100),
+  ownerUserId: id.optional(),
+  source: optionalCrmText(100),
+  tags: crmTags,
+  notes: optionalCrmText(5000),
+}).strict();
+
+export const crmAccountUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(160).optional(),
+  accountType: z.enum(["company", "startup", "institution", "investor", "government", "nonprofit", "community", "other"]).optional(),
+  industry: optionalCrmText(100).nullable().optional(),
+  website: safeHttpUrl.nullable().optional(),
+  city: optionalCrmText(100).nullable().optional(),
+  region: optionalCrmText(100).nullable().optional(),
+  country: optionalCrmText(100).nullable().optional(),
+  ownerUserId: id.optional(),
+  source: optionalCrmText(100).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+  notes: optionalCrmText(5000).nullable().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const crmContactCreateSchema = z.object({
+  workspaceId: id,
+  recordType: z.enum(["person", "creator_profile", "brand_profile", "community_profile", "other"]),
+  displayName: z.string().trim().min(2).max(160),
+  accountId: id.optional(),
+  email: emailSchema.optional(),
+  phone: optionalCrmText(40),
+  instagramHandle: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$/, "Enter a valid Instagram handle.").optional(),
+  instagramProfileUrl: optionalCrmUrl,
+  linkedinProfileUrl: optionalCrmUrl,
+  category: optionalCrmText(100),
+  ownerUserId: id.optional(),
+  source: optionalCrmText(100),
+  tags: crmTags,
+  notes: optionalCrmText(5000),
+}).strict();
+
+export const crmContactUpdateSchema = z.object({
+  displayName: z.string().trim().min(2).max(160).optional(),
+  accountId: id.nullable().optional(),
+  email: emailSchema.nullable().optional(),
+  phone: z.string().trim().max(40).nullable().optional(),
+  instagramHandle: z.string().trim().regex(/^@?[A-Za-z0-9._]{1,30}$/, "Enter a valid Instagram handle.").nullable().optional(),
+  instagramProfileUrl: safeHttpUrl.nullable().optional(),
+  linkedinProfileUrl: safeHttpUrl.nullable().optional(),
+  category: z.string().trim().max(100).nullable().optional(),
+  ownerUserId: id.optional(),
+  source: z.string().trim().max(100).nullable().optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(30).optional(),
+  notes: z.string().trim().max(5000).nullable().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const crmDoNotContactSchema = z.object({
+  doNotContact: z.boolean(),
+  reason: z.string().trim().min(3).max(300).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (!value.doNotContact && !value.reason?.trim()) {
+    ctx.addIssue({ code: "custom", path: ["reason"], message: "A reason is required to clear do-not-contact status." });
+  }
+});
+
+export const crmWorkspaceQuerySchema = z.object({ workspaceId: id });
+
+export const automationRuleUpdateSchema = z.object({
+  enabled: z.boolean(),
+  config: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.array(z.string()), z.null()])),
+}).strict();

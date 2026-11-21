@@ -308,6 +308,7 @@ export interface WorkReportEntry {
   blockers: string[];
   nextSteps: string[];
   linkUrls: string[];
+  attachmentIds?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -327,4 +328,275 @@ export interface WorkReportVersion {
   submittedAt: string;
   submittedBy: string;
   entries: Omit<WorkReportEntry, "createdAt" | "updatedAt">[];
+}
+
+
+export interface WorkReportAttachment {
+  id: string;
+  reportId: string;
+  workspaceId: string;
+  uploadedBy: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  storagePath: string;
+  status: "pending" | "active" | "deleted";
+  createdAt: string;
+}
+
+export interface TaskAttachment {
+  id: string;
+  taskId: string;
+  workspaceId: string;
+  uploadedBy: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  storagePath: string;
+  status: "pending" | "active" | "deleted";
+  createdAt: string;
+}
+
+// ── Module 4: automation and notification digest ──────────────────────────
+
+export type AutomationRunStatus = "pending" | "processing" | "completed" | "skipped" | "retry" | "failed";
+export type AutomationTriggerType = "domain_event" | "scheduled_query";
+
+export interface AutomationRule {
+  id: string;
+  organizationId: string;
+  workspaceId?: string;
+  ruleKey: string;
+  triggerType: AutomationTriggerType;
+  enabled: boolean;
+  config: Record<string, string | number | boolean | string[] | null>;
+  schemaVersion: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  organizationId: string;
+  workspaceId?: string;
+  ruleId: string;
+  ruleKey: string;
+  targetType: string;
+  targetId: string;
+  recipientUserId: string;
+  occurrenceKey: string;
+  idempotencyKey: string;
+  status: AutomationRunStatus;
+  attempts: number;
+  leaseUntil?: string;
+  nextRetryAt?: string;
+  domainEventId?: string;
+  lastErrorCode?: string;
+  startedAt?: string;
+  completedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationDigestItem {
+  id: string;
+  organizationId: string;
+  recipientUserId: string;
+  eventId: string;
+  eventType: string;
+  title: string;
+  body: string;
+  resourceType?: string;
+  resourceId?: string;
+  actionUrl?: string;
+  status: "pending" | "batched" | "sent" | "skipped";
+  digestId?: string;
+  createdAt: string;
+  includedAt?: string;
+}
+
+export interface NotificationDigest {
+  id: string;
+  organizationId: string;
+  recipientUserId: string;
+  digestDate: string;
+  timezone: string;
+  periodStart: string;
+  periodEnd: string;
+  itemCount: number;
+  eventId: string;
+  emailDeliveryId?: string;
+  status: "queued" | "sent" | "failed";
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Module 9: CRM ─────────────────────────────────────────────────────────
+
+export type CrmAccountType = "company" | "startup" | "institution" | "investor" | "government" | "nonprofit" | "community" | "other";
+export type CrmContactRecordType = "person" | "creator_profile" | "brand_profile" | "community_profile" | "other";
+export type CrmStatus = "active" | "archived";
+
+export interface CrmAccount {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  normalizedName: string;
+  accountType: CrmAccountType;
+  industry?: string;
+  website?: string;
+  websiteDomainNormalized?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  ownerUserId: string;
+  source?: string;
+  tags: string[];
+  status: CrmStatus;
+  notes?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  schemaVersion: number;
+}
+
+export interface CrmContact {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  recordType: CrmContactRecordType;
+  displayName: string;
+  normalizedName: string;
+  accountId?: string;
+  email?: string;
+  emailNormalized?: string;
+  phone?: string;
+  instagramHandleNormalized?: string;
+  instagramProfileUrl?: string;
+  linkedinProfileUrl?: string;
+  category?: string;
+  ownerUserId: string;
+  source?: string;
+  tags: string[];
+  doNotContact: boolean;
+  doNotContactReason?: string;
+  doNotContactSetBy?: string;
+  doNotContactSetAt?: string;
+  status: CrmStatus;
+  notes?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  schemaVersion: number;
+}
+
+export interface CrmIdentityKey {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  identityType: "email" | "instagram_handle" | "website_domain";
+  entityType: "contact" | "account";
+  entityId: string;
+  createdAt: string;
+}
+
+export type CrmOpportunityStatus = "open" | "won" | "lost" | "nurture" | "archived";
+export interface CrmOpportunity {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  title: string;
+  opportunityType: "sponsorship" | "institutional_partnership" | "mentor" | "speaker" | "judge" | "community" | "collaboration" | "other";
+  accountId?: string;
+  primaryContactId?: string;
+  pipelineKey: "partnership";
+  stageKey: string;
+  status: CrmOpportunityStatus;
+  ownerUserId: string;
+  supportingUserIds: string[];
+  expectedValue?: number;
+  currency?: string;
+  contributionDescription?: string;
+  expectedDecisionAt?: string;
+  nextStep?: string;
+  outcomeReason?: string;
+  sourceCampaignId?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  stageChangedAt: string;
+  archivedAt?: string;
+  schemaVersion: number;
+}
+
+export interface CrmCampaign {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  objective: string;
+  campaignType: "partnership_acquisition" | "instagram_outreach" | "mentor_acquisition" | "community_engagement" | "other";
+  channel: "instagram" | "email" | "phone" | "in_person" | "event" | "referral" | "other";
+  ownerUserId: string;
+  workstreamId?: string;
+  teamId?: string;
+  startAt?: string;
+  endAt?: string;
+  status: "draft" | "active" | "paused" | "completed" | "archived";
+  tags: string[];
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  schemaVersion: number;
+}
+
+export interface CrmCampaignMember {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  campaignId: string;
+  contactId: string;
+  assignedToUserId: string;
+  stage: "researched" | "qualified" | "ready_to_contact" | "contacted" | "replied" | "interested" | "converted" | "nurture" | "not_interested" | "do_not_contact";
+  firstContactAt?: string;
+  lastInteractionAt?: string;
+  nextFollowUpAt?: string;
+  linkedFollowUpTaskId?: string;
+  convertedAt?: string;
+  outcomeReason?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CrmActivity {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  accountId?: string;
+  contactId?: string;
+  opportunityId?: string;
+  campaignId?: string;
+  campaignMemberId?: string;
+  actorUserId: string;
+  activityType: "researched" | "qualified" | "initial_outreach" | "reply_received" | "follow_up_sent" | "call" | "meeting" | "proposal_shared" | "stage_changed" | "outcome_recorded" | "note" | "correction";
+  correctsActivityId?: string;
+  channel: "instagram" | "email" | "phone" | "meeting" | "in_person" | "internal" | "other";
+  direction?: "inbound" | "outbound" | "internal";
+  occurredAt: string;
+  summary: string;
+  outcome?: string;
+  requestId?: string;
+  createdAt: string;
 }

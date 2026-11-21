@@ -2,20 +2,24 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_PREFERENCES, EVENT_CATALOGUE, EVENT_TYPES, isRetryableStatus, nextRetryDelayMs, resolveChannels } from "@/domain/events";
 
 describe("notification channel policy", () => {
+  it("uses product-module metadata independent of historic release numbering", () => {
+    expect(EVENT_CATALOGUE.TASK_ASSIGNED.productModule).toBe(2);
+    expect(EVENT_CATALOGUE.WORK_REPORT_SUBMITTED.productModule).toBe(3);
+  });
   it("covers the Module 1 event types", () => {
     for (const t of ["USER_INVITED", "USER_ROLE_CHANGED", "USER_TEAM_ASSIGNED", "USER_WORKSTREAM_ASSIGNED", "ACCOUNT_STATUS_CHANGED"]) expect(EVENT_TYPES).toContain(t);
   });
   it("registers Module 2 task notifications", () => {
     expect(EVENT_TYPES).toContain("TASK_ASSIGNED");
     expect(EVENT_TYPES).toContain("TASK_STATUS_CHANGED");
-    expect(EVENT_CATALOGUE.TASK_ASSIGNED.module).toBe(2);
-    expect(EVENT_CATALOGUE.TASK_COMMENTED.module).toBe(2);
+    expect(EVENT_CATALOGUE.TASK_ASSIGNED.productModule).toBe(2);
+    expect(EVENT_CATALOGUE.TASK_COMMENTED.productModule).toBe(2);
     expect(resolveChannels("TASK_ASSIGNED", DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
   });
   it("registers Module 3 report lifecycle notifications", () => {
     for (const type of ["WORK_REPORT_SUBMITTED", "WORK_REPORT_APPROVED", "WORK_REPORT_NEEDS_REVISION"] as const) {
       expect(EVENT_TYPES).toContain(type);
-      expect(EVENT_CATALOGUE[type].module).toBe(3);
+      expect(EVENT_CATALOGUE[type].productModule).toBe(3);
       expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
     }
   });
