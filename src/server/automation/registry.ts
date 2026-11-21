@@ -22,6 +22,7 @@ export const AUTOMATION_RULES = {
     label: "Task due soon",
     description: "Remind the accountable owner before an open task deadline.",
     triggerType: "scheduled_query" as const satisfies AutomationTriggerType,
+    executionAvailable: true,
     configSchema: taskDueSoonConfig,
     defaultConfig: { leadMinutes: 1_440 },
   },
@@ -29,6 +30,7 @@ export const AUTOMATION_RULES = {
     label: "Task overdue",
     description: "Remind the accountable owner about an open overdue task.",
     triggerType: "scheduled_query" as const satisfies AutomationTriggerType,
+    executionAvailable: true,
     configSchema: taskOverdueConfig,
     defaultConfig: { repeatHours: 24 },
   },
@@ -36,6 +38,8 @@ export const AUTOMATION_RULES = {
     label: "CRM follow-up due",
     description: "Remind the assigned Inhub owner about a due CRM follow-up task.",
     triggerType: "scheduled_query" as const satisfies AutomationTriggerType,
+    executionAvailable: false,
+    unavailableReason: "CRM campaign follow-up records are not yet available in the current CRM workflow.",
     configSchema: crmFollowUpConfig,
     defaultConfig: { repeatHours: 24 },
   },
@@ -43,6 +47,8 @@ export const AUTOMATION_RULES = {
     label: "CRM reply waiting",
     description: "Remind the assigned owner when an inbound CRM reply is awaiting a response.",
     triggerType: "scheduled_query" as const satisfies AutomationTriggerType,
+    executionAvailable: false,
+    unavailableReason: "Inbound CRM reply tracking is not yet available in the current CRM workflow.",
     configSchema: crmReplyWaitingConfig,
     defaultConfig: { waitHours: 24 },
   },
@@ -53,6 +59,10 @@ export type AutomationRuleConfig = Record<string, string | number | boolean | st
 
 export function isAutomationRuleKey(value: string): value is AutomationRuleKey {
   return Object.prototype.hasOwnProperty.call(AUTOMATION_RULES, value);
+}
+
+export function isAutomationRuleExecutable(ruleKey: string): boolean {
+  return isAutomationRuleKey(ruleKey) && AUTOMATION_RULES[ruleKey].executionAvailable;
 }
 
 export function validateAutomationRuleConfig(ruleKey: string, config: unknown): AutomationRuleConfig {
@@ -67,6 +77,8 @@ export function automationRuleDefinition(ruleKey: AutomationRuleKey) {
     label: definition.label,
     description: definition.description,
     triggerType: definition.triggerType,
+    executionAvailable: definition.executionAvailable,
+    unavailableReason: "unavailableReason" in definition ? definition.unavailableReason : undefined,
     defaultConfig: definition.defaultConfig,
   };
 }

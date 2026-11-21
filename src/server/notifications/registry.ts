@@ -94,6 +94,53 @@ function invitationHandler(resent: boolean): EventHandler {
   };
 }
 
+function taskReminderHandler(kind: "due_soon" | "overdue"): EventHandler {
+  const eventTitle = kind === "due_soon" ? "Task due soon" : "Task overdue";
+  return {
+    async resolve(event) {
+      const taskId = String(event.payload.taskId ?? event.resourceId);
+      const userId = String(event.payload.userId ?? "");
+      const dueAt = String(event.payload.dueAt ?? "");
+      const taskSnap = await col("tasks").doc(taskId).get();
+      if (!taskSnap.exists) return [];
+      const task = fromDoc<Task>(taskSnap);
+      if (task.organizationId !== serverEnv().ORGANIZATION_ID || task.accountableUserId !== userId || task.dueAt !== dueAt) return [];
+      if (task.archivedAt || !["backlog", "assigned", "in_progress", "blocked"].includes(task.status)) return [];
+      const dueMs = Date.parse(dueAt);
+      if (!Number.isFinite(dueMs) || (kind === "due_soon" ? dueMs <= Date.now() : dueMs > Date.now())) return [];
+      const user = await getUser(userId);
+      if (!user || user.status !== "active") return [];
+      const organizationSnap = await col("organizations").doc(serverEnv().ORGANIZATION_ID).get();
+      const configuredTimeZone = String(organizationSnap.data()?.timezone ?? "Asia/Kolkata");
+      let timeZone = "Asia/Kolkata";
+      try {
+        new Intl.DateTimeFormat("en-IN", { timeZone: configuredTimeZone }).format(new Date(dueMs));
+        timeZone = configuredTimeZone;
+      } catch {
+        // Fall back to the organisation's documented default if its setting is invalid.
+      }
+      const dueLabel = new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(dueMs));
+      const link = `/tasks/${encodeURIComponent(taskId)}`;
+      const body = kind === "due_soon" ? `Due ${dueLabel}. Review the remaining work and update the task.` : `This task was due ${dueLabel} and is still open.`;
+      return [{
+        key: user.uid,
+        uid: user.uid,
+        email: user.email,
+        inApp: { title: eventTitle, body: `${task.title} · ${body}`, actionUrl: link, resourceType: "task", resourceId: taskId },
+        compose: async () => ({
+          templateId: kind === "due_soon" ? "task_due_soon" : "task_overdue",
+          subject: kind === "due_soon" ? `Coming up: ${task.title}` : `Overdue: ${task.title}`,
+          preview: body,
+          eyebrow: "Task reminder",
+          heading: kind === "due_soon" ? "A task deadline is approaching." : "A task is overdue.",
+          paragraphs: [`${task.title} is assigned to you. ${body}`],
+          cta: { label: "Open task", href: appUrl(link) },
+        }),
+      }];
+    },
+  };
+}
+
 const handlers: Record<EventType, EventHandler> = {
   USER_INVITED: invitationHandler(false),
   INVITATION_RESENT: invitationHandler(true),
@@ -378,6 +425,8 @@ const handlers: Record<EventType, EventHandler> = {
   },
   USER_TEAM_ASSIGNED: assignmentHandler("team"),
   USER_WORKSTREAM_ASSIGNED: assignmentHandler("workstream"),
+  TASK_DUE_SOON: taskReminderHandler("due_soon"),
+  TASK_OVERDUE: taskReminderHandler("overdue"),
 };
 
 function assignmentHandler(kind: "team" | "workstream"): EventHandler {

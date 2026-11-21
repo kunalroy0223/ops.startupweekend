@@ -9,6 +9,7 @@ import { serverEnv } from "../env";
 import { renderNotice } from "../email/render";
 import { sendWithResend, type SendResult } from "../email/resend";
 import { handlerFor, type Recipient } from "./registry";
+import { notificationDigestItemDocumentId } from "@/domain/notifications";
 
 /**
  * Durable outbox processor (at-least-once, idempotent).
@@ -88,6 +89,27 @@ async function fanOut(event: DomainEvent): Promise<void> {
           resourceId: r.inApp.resourceId,
           readAt: null,
           digestPending: email === "digest",
+          createdAt: now(),
+        });
+      } catch (err) {
+        if (!isAlreadyExists(err)) throw err;
+      }
+    }
+
+    if (email === "digest") {
+      const digestItemId = notificationDigestItemDocumentId(event.id, r.key);
+      try {
+        await col("notificationDigestItems").doc(digestItemId).create({
+          organizationId: org,
+          recipientUserId: r.uid,
+          eventId: event.id,
+          eventType: event.eventType,
+          title: r.inApp.title,
+          body: r.inApp.body,
+          resourceType: r.inApp.resourceType,
+          resourceId: r.inApp.resourceId,
+          actionUrl: r.inApp.actionUrl,
+          status: "pending",
           createdAt: now(),
         });
       } catch (err) {

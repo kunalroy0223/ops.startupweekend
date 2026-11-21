@@ -1,6 +1,6 @@
 # Inhub Workspace — Notification Specification
 
-**Status:** v1.1 (existing delivery foundation implemented; Module 4 automation extension proposed) · **Owner:** Platform · **Last updated:** 2026-11-21
+**Status:** v1.0 (Module 1 implemented) · **Owner:** Platform · **Last updated:** 2026-11-19
 
 This document is new; it was required by the master prompt and had no supplied draft. It describes how in-app notifications and email are produced, delivered and kept free of duplicates.
 
@@ -19,10 +19,10 @@ mutation (transaction) ─┬─ business write
                         ├─ auditLogs/{id}
                         └─ domainEvents/{id}  status: pending
                                  │
-             after() on the same request  ·  current Vercel cron: daily at 03:00 UTC  ·  Admin "Process now"
+             after() on the same request  ·  daily Vercel cron at 09:05 India Standard Time  ·  Admin "Process now"
                                  │
                        processOutbox()  (src/server/notifications/processor.ts)
-                                 │ claim event with a lease (transaction: pending → processing, leaseUntil; retries return to pending)
+                                 │ claim event with a lease (transaction: pending|retry → processing, leaseUntil)
                                  │ handlerFor(eventType).resolve(event) → Recipient[]   (registry.ts)
                                  │ channels = catalogue ∩ preferences ∩ recipient.only   (events.ts)
                     ┌────────────┴─────────────┐
@@ -109,48 +109,42 @@ Both events are emitted through the transactional domain-event outbox and resolv
 
 All six events are written in the business transaction through the outbox. Recipient resolution uses current account/membership state at processing time. Scheduled due-date reminders, digests and other recurring automation remain in Release 5 rather than being represented as immediate events in Modules 2 or 3.
 
-## Module 4 extension — scheduled automation and digests (proposed 2026-11-21)
+## 10. Module 5 — scheduled notifications and automation
 
-Module 4 extends the already implemented notification pipeline. The transactional outbox, in-app inbox, preferences, Resend integration, delivery idempotency/retry and webhook receipt handling remain the shared delivery foundation. See `docs/module-4-notifications-automation.md` for the full functional and technical specification.
+### 10.1 Scheduled task reminders
 
-### A. Scheduled automation boundary
+The first executable scheduled rules are `task_due_soon` and `task_overdue`. They evaluate active, non-archived tasks in `backlog`, `assigned`, `in_progress` or `blocked` states and send reminders to the current accountable owner. The task and owner are re-read immediately before fan-out; completed, archived, reassigned, deadline-changed or inactive-recipient cases are skipped.
 
-Scheduled rules must not call Resend directly or write user notifications outside the existing processor. A protected scheduled endpoint evaluates bounded, paginated candidates, revalidates the resource and recipient, claims a deterministic `automationRuns` record and then emits a domain event (or constructs a digest batch). The current outbox processor handles recipient fan-out and delivery.
+- Due-soon runs are keyed by task, owner and exact due timestamp.
+- Overdue runs use stable repeat buckets based on the configured repeat interval.
+- Automation run records use deterministic IDs, transactional leases and bounded retries.
+- The overdue scanner stores a per-rule pagination cursor so a large backlog does not permanently favour the first page.
+- Each run emits a normal domain event. The existing notification processor then applies current channel preferences and recipient eligibility.
 
-The first rules are task due-soon, task overdue, CRM follow-up due, CRM reply waiting and CRM opportunity stale. Work-report reminders remain disabled until the organisation's working days, reporting cutoff, timezone, grace period and exception policy have been confirmed. Meeting reminders are owned by Module 8.
+The production scheduler in this release is configured for one daily invocation at 09:05 India Standard Time. Use a 24-hour due-soon lead time as the dependable baseline for that cadence. A more frequent reminder cadence requires a deployment scheduler capable of invoking the protected cron route more frequently. The overdue rule rotates through the ordered task set in pages of up to 250 candidates per invocation.
 
-### B. Proposed Module 4/9 events (not yet implemented)
+### 10.2 Daily email digests
 
-| Event | Source | Recipients | Default channels |
-|---|---|---|---|
-| `TASK_DUE_SOON` | Scheduled task rule | Current accountable owner | In-app + preference-aware email |
-| `TASK_OVERDUE` | Scheduled task rule | Current accountable owner | In-app + preference-aware email |
-| `WORK_REPORT_SUBMISSION_REMINDER` | Scheduled report rule after policy approval | Report author | In-app + preference-aware email |
-| `CRM_CONTACT_ASSIGNED` | CRM contact/campaign assignment | New owner | In-app + preference-aware email |
-| `CRM_CAMPAIGN_ASSIGNED` | Campaign assignment | New owner | In-app + preference-aware email |
-| `CRM_FOLLOW_UP_DUE` | Scheduled CRM rule | Assigned outreach owner | In-app + preference-aware email |
-| `CRM_REPLY_WAITING` | CRM activity plus scheduled check | Assigned outreach owner | In-app + preference-aware email |
-| `CRM_OPPORTUNITY_STAGE_CHANGED` | Opportunity mutation | Owner and explicitly configured internal stakeholders | In-app; email optional |
-| `CRM_OPPORTUNITY_STALE` | Scheduled CRM rule | Opportunity owner | In-app + preference-aware email |
-| `DAILY_NOTIFICATION_DIGEST` | Digest scheduler | One active member | Email only |
-| `AUTOMATION_RUN_FAILED` | Automation processor | Admins | In-app; email optional |
+Non-essential events configured for `daily_digest` create deterministic `notificationDigestItems` rather than immediate email deliveries. The digest worker:
 
-Every new event must be added to `EVENT_TYPES`, `EVENT_CATALOGUE`, the server recipient registry and tests. The event metadata module/category fields must be updated consistently. Essential account/security events remain the only events that bypass optional preferences.
+1. Resolves the organisation timezone, falling back to `Asia/Kolkata` if the stored value is invalid.
+2. Groups eligible items into one daily digest per recipient and local calendar date, after 09:00 local time.
+3. Atomically creates/extends the queued digest and marks its items as batched.
+4. Rechecks the recipient's active status and current email/digest preferences immediately before sending.
+5. Sends a branded email through Resend with a stable idempotency key.
+6. Records `queued`, `sent`, `failed` or `skipped` state, attempts, provider message ID and bounded retry details.
 
-### C. Digest implementation requirement
+Admins can inspect recent email delivery outcomes in Automation, and retry eligible failed email deliveries. A failed digest can be retried by an Admin from Automation → Daily digest delivery. A retry retains the digest's stable provider idempotency key. Item assignment and digest claiming use transactions and short leases; expired processing leases are recovered by the next scheduled run.
 
-The current preference supports `daily_digest`, but a complete digest sender is not yet implemented. The `digestPending` flag on an in-app notification is not sufficient because a user may disable in-app notifications while retaining email digest preference.
+### 10.3 Rule availability
 
-The proposed digest path uses `notificationDigestItems` independent of the inbox, `notificationDigests` as recipient/window batches, a synthetic `DAILY_NOTIFICATION_DIGEST` outbox event and the existing `emailDeliveries`/Resend path. A digest is unique per recipient, organisation and digest window. Digest item inclusion and delivery status must be crash-safe and idempotent.
+Task due and overdue rules are executable. CRM follow-up and CRM reply-waiting rules remain visible but disabled until the CRM workflow persists the required follow-up and inbound-reply lifecycle records. The evaluator never runs unsupported rules.
 
-### D. Preference and multi-organisation note
+### 10.4 Operations and safeguards
 
-Preferences currently use `notificationPreferences/{userId}`. This supports the current single-organisation deployment. Before one user can have independent notification preferences in multiple organisations, migrate to an organisation-scoped document key with a backfill; do not silently reinterpret the existing document IDs.
-
-### E. Scheduler operations
-
-The current Vercel cron configuration calls `/api/cron/process-outbox` daily at 03:00 UTC. That remains the delivery backstop and is not frequent enough to evaluate operational reminders. Module 4 proposes a separate protected automation endpoint on a bounded cadence approved for the deployed hosting plan. Cron invocations must be authenticated, paginated, lease-protected, observable and idempotent.
-
-### F. Status
-
-Everything in this extension is **proposed** until implemented and tested. Do not describe scheduled reminders, CRM notification events or daily digest as available functionality before the related screens, server services, rules/indexes and integration tests are deployed.
+- Vercel cron and the Admin-only Run evaluator now action call the same scheduled processor, outbox and digest worker.
+- The cron route requires `Authorization: Bearer $CRON_SECRET` and uses a constant-time comparison.
+- Automation rule mutation, failed-run retry and digest retry are Admin-only and audited.
+- Run and digest IDs are stable across repeated invocations; leases prevent concurrent workers from processing the same item.
+- The evaluator does not create tasks or modify business task state. Its first executable actions are notifications only.
+- CRM follow-up rules are not enabled until their source workflows are complete.
