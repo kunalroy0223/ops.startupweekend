@@ -162,11 +162,15 @@
 
 @layer base {
   html {
+    width: 100%;
+    max-width: 100%;
     background: var(--canvas);
     color: var(--text-primary);
     -webkit-text-size-adjust: 100%;
   }
   body {
+    width: 100%;
+    max-width: 100%;
     font-family: var(--font-sans);
     font-size: 14px;
     line-height: 1.5;

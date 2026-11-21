@@ -23,20 +23,20 @@ export function DirectoryFilters({ q, role, status }: { q?: string; role?: strin
         e.preventDefault();
         go({});
       }}
-      className="grid min-w-0 grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center"
+      className="grid w-full min-w-0 max-w-full grid-cols-2 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(9rem,10rem)_minmax(9rem,10rem)] sm:items-center"
     >
-      <div className="relative col-span-2 min-w-0 w-full sm:col-span-1 sm:max-w-sm sm:flex-1">
+      <div className="relative col-span-2 min-w-0 w-full max-w-full sm:col-span-1">
         <label htmlFor="people-q" className="sr-only">Search by name or email</label>
         <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-3" aria-hidden />
         <input id="people-q" value={text} onChange={(e) => setText(e.target.value)} placeholder="Name or email starts with…" className="h-10 w-full min-w-0 rounded-[var(--radius-control)] border border-line bg-surface pr-3 pl-9 text-sm placeholder:text-fg-3 focus:border-line-strong focus:outline-none" />
       </div>
       <label className="sr-only" htmlFor="people-role">Role</label>
-      <Select id="people-role" value={role ?? ""} onChange={(e) => go({ role: e.target.value || undefined })} className="!w-full min-w-0 sm:!w-auto sm:min-w-36">
+      <Select id="people-role" value={role ?? ""} onChange={(e) => go({ role: e.target.value || undefined })} className="!w-full min-w-0 max-w-full">
         <option value="">All roles</option>
         {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
       </Select>
       <label className="sr-only" htmlFor="people-status">Status</label>
-      <Select id="people-status" value={status ?? ""} onChange={(e) => go({ status: e.target.value || undefined })} className="!w-full min-w-0 sm:!w-auto sm:min-w-36">
+      <Select id="people-status" value={status ?? ""} onChange={(e) => go({ status: e.target.value || undefined })} className="!w-full min-w-0 max-w-full">
         <option value="">Any status</option>
         {USER_STATUSES.filter((s) => s !== "invited").map((s) => <option key={s} value={s}>{USER_STATUS_LABEL[s]}</option>)}
       </Select>
