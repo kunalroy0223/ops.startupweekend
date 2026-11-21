@@ -19,6 +19,8 @@ export const EVENT_TYPES = [
   "WORK_REPORT_SUBMITTED",
   "WORK_REPORT_APPROVED",
   "WORK_REPORT_NEEDS_REVISION",
+  "TASK_DUE_SOON",
+  "TASK_OVERDUE",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -100,6 +102,22 @@ export const EVENT_CATALOGUE: Record<EventType, EventMeta> = {
     channels: { inApp: true, email: true },
     productModule: 1,
   },
+  TASK_DUE_SOON: {
+    label: "Task due reminders",
+    description: "A task you own is approaching its due time.",
+    category: "work",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 5,
+  },
+  TASK_OVERDUE: {
+    label: "Overdue task reminders",
+    description: "A task you own is overdue and remains open.",
+    category: "work",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 5,
+  },
 };
 
 export function isEventType(value: string): value is EventType {
@@ -122,9 +140,8 @@ export const DEFAULT_PREFERENCES: ChannelPreferenceInput = {
 
 /**
  * Decide which channels a recipient gets for an event. Essential events always
- * go out on their catalogue channels. Daily-digest delivery is recorded as
- * "digest" so the Module 5 digest job can pick it up; until that job ships,
- * digest emails are held, never silently dropped or sent immediately.
+ * go out on their catalogue channels. Daily-digest delivery is queued separately
+ * by the Module 5 digest processor; it is never silently sent immediately.
  */
 export function resolveChannels(
   type: EventType,

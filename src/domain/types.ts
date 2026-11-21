@@ -357,7 +357,7 @@ export interface TaskAttachment {
   createdAt: string;
 }
 
-// ── Module 4: automation and notification digest ──────────────────────────
+// ── Module 5: automation and notification digest ──────────────────────────
 
 export type AutomationRunStatus = "pending" | "processing" | "completed" | "skipped" | "retry" | "failed";
 export type AutomationTriggerType = "domain_event" | "scheduled_query";
@@ -375,6 +375,8 @@ export interface AutomationRule {
   updatedBy: string;
   createdAt: string;
   updatedAt: string;
+  /** Internal pagination cursor for the scheduled overdue-task scan. */
+  overdueCursorTaskId?: string;
 }
 
 export interface AutomationRun {
@@ -428,7 +430,14 @@ export interface NotificationDigest {
   itemCount: number;
   eventId: string;
   emailDeliveryId?: string;
-  status: "queued" | "sent" | "failed";
+  status: "queued" | "processing" | "sent" | "failed" | "skipped";
+  itemIds?: string[];
+  attempts?: number;
+  leaseUntil?: string;
+  nextRetryAt?: string;
+  lastErrorCode?: string;
+  providerMessageId?: string;
+  sentAt?: string;
   createdAt: string;
   updatedAt: string;
 }
