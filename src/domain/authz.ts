@@ -335,12 +335,13 @@ export const RELEASED_NAV: ReadonlySet<NavKey> = new Set<NavKey>([
   "reports",
   "crm",
   "automation",
+  "analytics",
 ]);
 
 const NAV_BY_ROLE: Record<Role, readonly NavKey[]> = {
   admin: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "automation", "notifications", "people", "analytics", "activity", "settings"],
   lead: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "notifications", "people", "analytics", "activity", "settings"],
-  member: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "notifications", "people", "activity", "settings"],
+  member: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "analytics", "notifications", "people", "activity", "settings"],
 };
 
 export function navFor(actor: Actor, released: ReadonlySet<NavKey> = RELEASED_NAV): NavKey[] {

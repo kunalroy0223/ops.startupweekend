@@ -132,11 +132,11 @@ describe("administrative safeguards", () => {
 
 describe("navigation", () => {
   it("never shows inaccessible or unreleased items", () => {
-    expect(navFor(actor("member"))).not.toContain("analytics");
+    expect(navFor(actor("member"))).toContain("analytics");
     expect(navFor(actor("admin"))).toContain("settings");
     expect(navFor(actor("admin"))).toContain("tasks");
     expect(navFor(actor("admin"))).toContain("reports");
-    expect(navFor(actor("admin"))).not.toContain("analytics");
+    expect(navFor(actor("admin"))).toContain("analytics");
     expect(navFor(actor("member", "suspended"))).toEqual([]);
   });
 });

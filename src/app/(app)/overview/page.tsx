@@ -1,4 +1,4 @@
-import { ArrowUpRight, Bell, ChartPie, Check, CircleAlert, ClipboardList, History, ListTodo, MailPlus, MailWarning, Network, PartyPopper, Rocket, Shield, Siren, UserCheck, UserPlus, Users, UsersRound, Zap } from "lucide-react";
+import { ArrowUpRight, Bell, ChartColumn, ChartPie, Check, CircleAlert, History, ListTodo, MailPlus, MailWarning, Network, PartyPopper, Rocket, Shield, Siren, UserCheck, UserPlus, Users, UsersRound, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { HeadlineReveal } from "@/components/motion/gsap-fx";
@@ -15,6 +15,7 @@ import { cn } from "@/lib/cn";
 import { DEFAULT_TZ, formatDate, greeting, relativeTime } from "@/lib/format";
 import { adminOverview, getOrganization, scopedOverview, type ScopeSummary } from "@/server/queries";
 import { requireActive } from "@/server/session";
+import { getAnalyticsOverview } from "@/server/services/analytics";
 
 export const metadata: Metadata = { title: "Overview" };
 
@@ -43,7 +44,7 @@ export default async function OverviewPage() {
 }
 
 async function AdminOverviewView({ actor, tz }: { actor: Actor; tz: string }) {
-  const o = await adminOverview(actor);
+  const [o, analytics] = await Promise.all([adminOverview(actor), getAnalyticsOverview(actor, 30, tz)]);
   const setupDone = { workstream: o.workstreams > 0, team: o.teams > 0, people: o.users.total > 1 || o.pendingInvitations > 0 };
   const needsSetup = !setupDone.workstream || !setupDone.team || !setupDone.people;
   const alerts = [
@@ -125,6 +126,18 @@ async function AdminOverviewView({ actor, tz }: { actor: Actor; tz: string }) {
             )}
           </Panel>
 
+          <Panel aria-labelledby="operational-pulse">
+            <SectionHeading icon={<ChartColumn />} id="operational-pulse" title="Operational pulse" action={<Link href="/analytics" className="text-[13px] font-semibold text-fg-2 hover:text-fg">Open analytics</Link>} />
+            <MetricRow>
+              <Metric label="Visible tasks" value={analytics.tasks.total} />
+              <Metric label="Overdue" value={analytics.tasks.overdue} />
+              <Metric label="Blocked" value={analytics.tasks.blocked} />
+              <Metric label="Completed in 30 days" value={analytics.tasks.completedInRange} />
+              <Metric label="Active projects" value={analytics.projects.active} />
+              <Metric label="Reports awaiting review" value={analytics.reports.awaitingReview} />
+            </MetricRow>
+          </Panel>
+
           <Panel aria-labelledby="recent">
             <SectionHeading icon={<History />} id="recent" title="Recent administrative activity" action={<Link href="/activity" className="text-[13px] font-semibold text-fg-2 hover:text-fg">All activity</Link>} />
             {o.recent.length ? <ActivityTimeline items={o.recent.map((r) => ({ id: r.id, actorName: r.actorName, action: r.action, createdAt: r.createdAt }))} tz={tz} /> : <EmptyState compact icon={<History />} title="No activity yet">Changes to people, teams and settings appear here as they happen.</EmptyState>}
@@ -189,7 +202,7 @@ function ScopeList({ items, empty }: { items: ScopeSummary[]; empty: string }) {
 }
 
 async function ScopedOverviewView({ actor, tz }: { actor: Actor; tz: string }) {
-  const o = await scopedOverview(actor);
+  const [o, analytics] = await Promise.all([scopedOverview(actor), getAnalyticsOverview(actor, 30, tz)]);
   const isLead = actor.role === "lead";
   const ledStreams = o.structure.workstreams.filter((w) => w.myMembership === "lead");
   const ledTeams = o.structure.teams.filter((t) => t.myMembership === "lead");
@@ -223,10 +236,13 @@ async function ScopedOverviewView({ actor, tz }: { actor: Actor; tz: string }) {
         </div>
         <aside className="grid content-start gap-6 lg:col-span-5">
           <Panel aria-labelledby="work">
-            <SectionHeading icon={<ListTodo />} id="work" title={isLead ? "Team work" : "Your work"} />
-            <EmptyState compact icon={<ClipboardList />} title="No tasks or reports yet">
-              Tasks arrive with Module 2 and daily work reports with Module 3. {isLead ? "You'll review your teams' work here." : "Your assigned work will appear here."}
-            </EmptyState>
+            <SectionHeading icon={<ListTodo />} id="work" title={isLead ? "Team work" : "Your work"} action={<Link href="/analytics" className="text-[13px] font-semibold text-fg-2 hover:text-fg">Detailed analytics</Link>} />
+            <MetricRow>
+              <Metric label={isLead ? "Visible team tasks" : "Your tasks"} value={analytics.tasks.total} />
+              <Metric label="Overdue" value={analytics.tasks.overdue} />
+              <Metric label={isLead ? "Blocked" : "Due in 7 days"} value={isLead ? analytics.tasks.blocked : analytics.tasks.dueSoon} />
+              <Metric label={isLead ? "Reports awaiting review" : "Reports submitted"} value={isLead ? analytics.reports.awaitingReview : analytics.reports.submittedInRange} />
+            </MetricRow>
           </Panel>
           <Panel aria-labelledby="mine">
             <SectionHeading icon={<History />} id="mine" title="Your recent activity" action={<Link href="/activity" className="text-[13px] font-semibold text-fg-2 hover:text-fg">All</Link>} />
