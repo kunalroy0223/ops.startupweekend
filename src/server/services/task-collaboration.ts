@@ -21,14 +21,14 @@ export async function getTaskDetail(actor: Actor, id: string) {
   const snap = await ref.get();
   if (!snap.exists) return null;
   const task = fromDoc<Task>(snap);
-  if (task.organizationId !== serverEnv().ORGANIZATION_ID || !await canAccessTask(actor, task)) return null;
+  if (task.organizationId !== serverEnv().ORGANIZATION_ID || task.archivedAt || !await canAccessTask(actor, task)) return null;
   const [comments, activity] = await Promise.all([
     ref.collection("comments").orderBy("createdAt", "asc").limit(100).get(),
     ref.collection("activity").orderBy("createdAt", "desc").limit(100).get(),
   ]);
   return {
     task,
-    comments: comments.docs.map(d => fromDoc<TaskComment & { authorName?: string }>(d)),
+    comments: comments.docs.map(d => fromDoc<TaskComment & { authorName?: string }>(d)).filter(comment => !comment.deletedAt),
     activity: activity.docs.map(d => fromDoc<TaskActivityItem>(d)),
     canManage: actor.role === "admin" || actor.role === "lead",
     canComment: true,
@@ -40,6 +40,7 @@ export async function addTaskComment(actor: Actor, taskId: string, body: string,
   const taskSnap = await taskRef.get();
   if (!taskSnap.exists) throw notFound("Task not found.");
   const task = fromDoc<Task>(taskSnap);
+  if (task.archivedAt) throw notFound("Task not found.");
   if (!await canAccessTask(actor, task)) throw forbidden();
   const mentions = [...new Set(mentionedUserIds)].filter(uid => uid !== actor.uid);
   const profiles = await Promise.all(mentions.map(uid => col("users").doc(uid).get()));
@@ -55,6 +56,7 @@ export async function addTaskComment(actor: Actor, taskId: string, body: string,
     const current = await tx.get(taskRef);
     if (!current.exists) throw notFound("Task not found.");
     const liveTask = fromDoc<Task>(current);
+    if (liveTask.archivedAt) throw notFound("Task not found.");
     if (!await canAccessTask(actor, liveTask)) throw forbidden();
     tx.create(commentRef, {
       organizationId: task.organizationId, workspaceId: task.workspaceId, taskId,
@@ -74,5 +76,26 @@ export async function addTaskComment(actor: Actor, taskId: string, body: string,
         preview: body.slice(0, 180),
       },
     });
+  });
+}
+
+
+export async function deleteTaskComment(actor: Actor, taskId: string, commentId: string, requestId: string) {
+  const taskRef = col("tasks").doc(taskId);
+  const commentRef = taskRef.collection("comments").doc(commentId);
+  await adminDb().runTransaction(async tx => {
+    const [taskSnap, commentSnap] = await Promise.all([tx.get(taskRef), tx.get(commentRef)]);
+    if (!taskSnap.exists || !commentSnap.exists) throw notFound("Comment not found.");
+    const task = fromDoc<Task>(taskSnap);
+    const comment = fromDoc<TaskComment>(commentSnap);
+    if (task.organizationId !== serverEnv().ORGANIZATION_ID || comment.organizationId !== task.organizationId || task.archivedAt) throw notFound("Comment not found.");
+    if (!await canAccessTask(actor, task)) throw forbidden();
+    if (comment.authorUserId !== actor.uid && actor.role !== "admin" && actor.role !== "lead") throw forbidden("Only the comment author or an authorised manager can delete this comment.");
+    if (comment.deletedAt) return;
+    tx.update(commentRef, { deletedAt: now() });
+    const activityRef = taskRef.collection("activity").doc();
+    tx.create(activityRef, { actorUserId: actor.uid, action: "comment_deleted", summary: `${actor.displayName} deleted a comment`, createdAt: now() });
+    tx.update(taskRef, { updatedAt: now(), updatedBy: actor.uid });
+    writeAudit(tx, { actorUserId: actor.uid, action: "task.comment_deleted", resourceType: "task", resourceId: taskId, subjectUserIds: [task.accountableUserId, ...task.collaboratorUserIds], workspaceId: task.workspaceId, before: { commentId, authorUserId: comment.authorUserId }, after: { deletedAt: "deleted" }, requestId });
   });
 }

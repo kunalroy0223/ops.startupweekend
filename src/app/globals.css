@@ -172,6 +172,7 @@
     line-height: 1.5;
     background: var(--canvas);
     -webkit-font-smoothing: antialiased;
+    overflow-x: clip;
   }
   ::selection {
     background: var(--accent);

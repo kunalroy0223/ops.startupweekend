@@ -6,16 +6,16 @@ import { requireActive } from "@/server/session";
 
 export const dynamic = "force-dynamic";
 
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ project?: string; deleted?: string }> }) {
   const { actor } = await requireActive();
   const params = await searchParams;
   const [tasks, projects, workspaces, structure, directory, adminPeople, organization] = await Promise.all([
-    listTasks(actor), listProjects(actor), listWorkspaces(actor), listStructure(actor), listDirectory(actor, {}),
+    listTasks(actor, (params.deleted === "1" && isAdmin(actor)) || (params.deleted === "1" && actor.role === "lead")), listProjects(actor), listWorkspaces(actor), listStructure(actor), listDirectory(actor, {}),
     isAdmin(actor) ? pickablePeople(actor) : Promise.resolve([]), getOrganization(),
   ]);
   const people = isAdmin(actor) ? adminPeople : directory.users;
   if (!people.some(user => user.uid === actor.uid)) people.unshift({ uid: actor.uid, displayName: actor.displayName, email: actor.email, role: actor.role, status: actor.status, createdAt: "" });
-  return <TaskWorkspace
+  return <TaskWorkspace key={params.deleted === "1" && (isAdmin(actor) || actor.role === "lead") ? "deleted" : "active"}
     initialTasks={tasks}
     projects={projects}
     workspaces={workspaces.map(w => ({ id: w.id, name: w.name }))}
@@ -26,5 +26,6 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     currentUserId={actor.uid}
     timeZone={organization?.timezone ?? "Asia/Kolkata"}
     initialProjectId={params.project || "all"}
+    showDeleted={params.deleted === "1" && (isAdmin(actor) || actor.role === "lead")}
   />;
 }

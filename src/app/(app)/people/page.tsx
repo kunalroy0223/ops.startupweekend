@@ -34,7 +34,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const base = new URLSearchParams(Object.entries({ q: query.q, role: query.role, status: query.status }).filter(([, v]) => v) as [string, string][]);
 
   return (
-    <div className="grid gap-8">
+    <div className="grid min-w-0 gap-8">
       <PageHeader
         icon={<Users />}
         eyebrow={admin ? "Organisation directory" : actor.role === "lead" ? "People in your scope" : "Your teammates"}
@@ -52,12 +52,12 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
         }
       />
 
-      <section aria-labelledby="directory" className="grid gap-4">
+      <section aria-labelledby="directory" className="grid min-w-0 gap-4">
         <h2 id="directory" className="sr-only">Directory</h2>
         <DirectoryFilters q={query.q} role={query.role} status={query.status} />
         {page.users.length ? (
           <>
-            <Table caption="People directory" className="max-md:hidden">
+            <div className="hidden min-w-0 max-w-full overflow-x-auto md:block"><Table caption="People directory" className="min-w-[680px]">
               <thead>
                 <tr>
                   <Th>Person</Th>
@@ -86,15 +86,15 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
                   </Tr>
                 ))}
               </tbody>
-            </Table>
-            <ul className="grid gap-2 md:hidden">
+            </Table></div>
+            <ul className="grid min-w-0 gap-2 md:hidden">
               {page.users.map((u) => (
-                <li key={u.uid}>
-                  <Link href={`/people/${u.uid}`} className="group flex items-center gap-3 rounded-[var(--radius-panel)] border border-line bg-surface p-3 transition-transform active:scale-[0.99]">
+                <li key={u.uid} className="min-w-0">
+                  <Link href={`/people/${u.uid}`} className="group flex min-w-0 w-full items-center gap-3 overflow-hidden rounded-[var(--radius-panel)] border border-line bg-surface p-3 transition-transform active:scale-[0.99]">
                     <Avatar name={u.displayName} seed={u.uid} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-semibold">{u.displayName}</span>
-                      <span className="block truncate text-xs text-fg-2">{u.email}</span>
+                      <span className="block min-w-0 truncate text-xs text-fg-2">{u.email}</span>
                       <span className="mt-1.5 flex flex-wrap gap-1.5"><RoleBadge role={u.role} /><UserStatusBadge status={u.status} /></span>
                     </span>
                   </Link>

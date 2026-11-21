@@ -1,5 +1,5 @@
 "use client";
-import { Archive, ArchiveRestore, Pencil, Plus } from "lucide-react";
+import { ArchiveRestore, Pencil, Plus, Trash2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -150,7 +150,7 @@ export function ArchiveButton({ kind, id, name, archived }: { kind: Kind; id: st
     setError(null);
     try {
       await api(`/api/structure/${kind}/${id}/archive`, { body: { archived: !archived } });
-      toast({ tone: "success", message: archived ? `${name} restored.` : `${name} archived.` });
+      toast({ tone: "success", message: archived ? `${name} restored.` : `${name} deleted.` });
       setOpen(false);
       router.refresh();
     } catch (err) {
@@ -161,8 +161,8 @@ export function ArchiveButton({ kind, id, name, archived }: { kind: Kind; id: st
   }
   return (
     <>
-      <Button variant="ghost" icon={archived ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />} onClick={() => setOpen(true)}>
-        {archived ? "Restore" : "Archive"}
+      <Button variant="ghost" icon={archived ? <ArchiveRestore className="size-4" /> : <Trash2 className="size-4" />} onClick={() => setOpen(true)}>
+        {archived ? "Restore" : "Delete"}
       </Button>
       <ConfirmDialog
         open={open}
@@ -171,9 +171,9 @@ export function ArchiveButton({ kind, id, name, archived }: { kind: Kind; id: st
         loading={busy}
         error={error}
         tone={archived ? "primary" : "danger"}
-        title={archived ? `Restore ${name}?` : `Archive ${name}?`}
-        confirmLabel={archived ? "Restore" : "Archive"}
-        consequence={archived ? `The ${noun} becomes active again and people can be assigned to it.` : `Nothing is deleted. The ${noun}, its members and its history are kept and can be restored. No one new can be assigned while it's archived.`}
+        title={archived ? `Restore ${name}?` : `Delete ${name}?`}
+        confirmLabel={archived ? "Restore" : "Delete"}
+        consequence={archived ? `The ${noun} becomes active again and people can be assigned to it.` : `The ${noun} will be removed from active views. Its members and history are retained, and an administrator can restore it from archived records.`}
       />
     </>
   );

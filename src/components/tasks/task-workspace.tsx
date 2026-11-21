@@ -2,14 +2,15 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { Filter, ListTodo, Plus, Search, X } from "lucide-react";
+import { ArchiveRestore, Filter, ListTodo, Plus, Search, Trash2, X } from "lucide-react";
 import type { Project, Task, TaskPriority, TaskStatus } from "@/domain/types";
 import type { PublicUser, ScopeSummary } from "@/server/queries";
 import { api, ApiClientError } from "@/lib/api";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, LinkButton } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/field";
 import { PageHeader, Panel, SectionHeading } from "@/components/ui/page-header";
+import { ConfirmDialog } from "@/components/ui/dialog";
 import { useRouter } from "next/navigation";
 import { dateTimeToIso, formatDateTimeInTimeZone } from "@/lib/timezone";
 
@@ -28,9 +29,9 @@ const label = (s: string) => s.replaceAll("_", " ").replace(/\b\w/g, c => c.toUp
 
 function Labeled({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) { return <label className={`grid gap-1.5 text-[13px] font-semibold ${className}`}>{label}{children}</label>; }
 
-export function TaskWorkspace({ initialTasks, projects, workspaces, teams, workstreams, people, canManage, currentUserId, timeZone, initialProjectId = "all" }: {
+export function TaskWorkspace({ initialTasks, projects, workspaces, teams, workstreams, people, canManage, currentUserId, timeZone, initialProjectId = "all", showDeleted = false }: {
   initialTasks: Task[]; projects: Project[]; workspaces: { id: string; name: string }[];
-  teams: ScopeSummary[]; workstreams: ScopeSummary[]; people: PublicUser[]; canManage: boolean; currentUserId: string; timeZone: string; initialProjectId?: string;
+  teams: ScopeSummary[]; workstreams: ScopeSummary[]; people: PublicUser[]; canManage: boolean; currentUserId: string; timeZone: string; initialProjectId?: string; showDeleted?: boolean;
 }) {
   const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
@@ -42,6 +43,8 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
   const [showCreate, setShowCreate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [deleting, setDeleting] = useState<Task | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
   const [form, setForm] = useState({
     title: "", workspaceId: workspaces[0]?.id ?? "", projectId: "", teamId: "", workstreamId: "",
     accountableUserId: people[0]?.uid ?? "", priority: "medium" as TaskPriority,
@@ -97,12 +100,27 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
     } catch (err) { setError(err instanceof ApiClientError ? err.message : "Unable to update task status."); }
   }
 
+  async function deleteSelectedTask() {
+    if (!deleting) return;
+    setDeleteBusy(true); setError("");
+    try {
+      if (showDeleted) await api(`/api/tasks/${deleting.id}`, { method: "POST" });
+      else await api(`/api/tasks/${deleting.id}`, { method: "DELETE" });
+      setTasks(old => old.filter(task => task.id !== deleting.id));
+      setDeleting(null);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiClientError ? err.message : "Unable to delete task.");
+    } finally { setDeleteBusy(false); }
+  }
+
   const teamName = (id?: string) => teams.find(t => t.id === id)?.name;
   const personName = (id: string) => people.find(p => p.uid === id)?.displayName ?? "Assigned user";
   return <div className="space-y-6">
     <PageHeader eyebrow="WORK MANAGEMENT" title="Tasks" description="Plan work, assign clear ownership and keep delivery moving."
-      icon={<ListTodo />} actions={canManage ? <Button onClick={() => setShowCreate(v => !v)} icon={showCreate ? <X /> : <Plus />}>{showCreate ? "Close" : "Create task"}</Button> : undefined}
-      meta={<><Badge>{tasks.length} tasks</Badge><Badge tone="info">{tasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length} active</Badge></>} />
+      icon={<ListTodo />}
+      actions={<div className="flex flex-wrap gap-2">{canManage ? <LinkButton href={showDeleted ? "/tasks" : "/tasks?deleted=1"} size="sm" icon={showDeleted ? <ListTodo /> : <ArchiveRestore />}>{showDeleted ? "Active tasks" : "Deleted tasks"}</LinkButton> : null}{canManage && !showDeleted ? <Button onClick={() => setShowCreate(v => !v)} icon={showCreate ? <X /> : <Plus />}>{showCreate ? "Close" : "Create task"}</Button> : null}</div>}
+      meta={<><Badge>{tasks.length} {showDeleted ? "deleted" : "tasks"}</Badge>{!showDeleted ? <Badge tone="info">{tasks.filter(t => t.status !== "completed" && t.status !== "cancelled").length} active</Badge> : null}</>} />
     {error ? <div role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</div> : null}
     {showCreate && canManage ? <Panel>
       <SectionHeading title="Create a task" />
@@ -127,7 +145,7 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SectionHeading title="Task register" count={filtered.length} />
         <div className="flex flex-col gap-2 sm:flex-row">
-          <div className="inline-flex h-9 rounded-md border border-line bg-canvas p-0.5" aria-label="Task view">
+          <div className={`${showDeleted ? "hidden" : "inline-flex"} h-9 rounded-md border border-line bg-canvas p-0.5`} aria-label="Task view">
             <button type="button" onClick={() => setView("list")} aria-pressed={view === "list"} className={`rounded px-2.5 text-xs font-semibold ${view === "list" ? "bg-surface shadow-sm" : "text-fg-3"}`}>List</button>
             <button type="button" onClick={() => setView("board")} aria-pressed={view === "board"} className={`rounded px-2.5 text-xs font-semibold ${view === "board" ? "bg-surface shadow-sm" : "text-fg-3"}`}>Board</button>
           </div>
@@ -138,25 +156,36 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
         </div>
       </div>
       {filtered.length ? (view === "list" ? <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm">
-        <thead><tr className="border-b border-line text-xs text-fg-3"><th className="px-3 py-3 font-semibold">Task</th><th className="px-3 py-3 font-semibold">Owner / team</th><th className="px-3 py-3 font-semibold">Priority</th><th className="px-3 py-3 font-semibold">Due</th><th className="px-3 py-3 font-semibold">Status</th></tr></thead>
+        <thead><tr className="border-b border-line text-xs text-fg-3"><th className="px-3 py-3 font-semibold">Task</th><th className="px-3 py-3 font-semibold">Owner / team</th><th className="px-3 py-3 font-semibold">Priority</th><th className="px-3 py-3 font-semibold">Due</th><th className="px-3 py-3 font-semibold">Status</th>{canManage ? <th className="px-3 py-3 font-semibold"><span className="sr-only">Actions</span></th> : null}</tr></thead>
         <tbody>{filtered.map(task => <tr key={task.id} className="border-b border-line last:border-0 hover:bg-muted/40">
-          <td className="max-w-[360px] px-3 py-3"><Link href={`/tasks/${task.id}`} className="font-semibold hover:underline">{task.title}</Link>{task.description ? <p className="mt-1 line-clamp-1 text-xs text-fg-3">{task.description}</p> : null}</td>
+          <td className="max-w-[360px] px-3 py-3">{showDeleted ? <span className="font-semibold">{task.title}</span> : <Link href={`/tasks/${task.id}`} className="font-semibold hover:underline">{task.title}</Link>}{task.description ? <p className="mt-1 line-clamp-1 text-xs text-fg-3">{task.description}</p> : null}</td>
           <td className="px-3 py-3"><p>{personName(task.accountableUserId)}</p>{task.teamId ? <p className="mt-1 text-xs text-fg-3">{teamName(task.teamId) ?? "Team"}</p> : null}</td>
           <td className="px-3 py-3"><Badge tone={task.priority === "urgent" ? "danger" : task.priority === "high" ? "warning" : "neutral"}>{label(task.priority)}</Badge></td>
           <td className="px-3 py-3 text-xs text-fg-2">{formatDateTimeInTimeZone(task.dueAt, timeZone)}</td>
-          <td className="px-3 py-3"><div className="flex items-center gap-2"><Badge tone={statusTone[task.status]}>{label(task.status)}</Badge>{quickTransitions(task).length ? <select aria-label={`Change status for ${task.title}`} value={task.status} onChange={e => changeStatus(task,e.target.value as TaskStatus)} className="max-w-28 rounded border border-line bg-canvas px-1.5 py-1 text-xs"><option value={task.status}>{label(task.status)}</option>{quickTransitions(task).map(next => <option key={next} value={next}>{label(next)}</option>)}</select> : null}</div></td>
+          <td className="px-3 py-3"><div className="flex items-center gap-2"><Badge tone={statusTone[task.status]}>{label(task.status)}</Badge>{!showDeleted && quickTransitions(task).length ? <select aria-label={`Change status for ${task.title}`} value={task.status} onChange={e => changeStatus(task,e.target.value as TaskStatus)} className="max-w-28 rounded border border-line bg-canvas px-1.5 py-1 text-xs"><option value={task.status}>{label(task.status)}</option>{quickTransitions(task).map(next => <option key={next} value={next}>{label(next)}</option>)}</select> : null}</div></td>{canManage ? <td className="px-3 py-3"><Button size="sm" variant="ghost" className={showDeleted ? "text-accent-text" : "text-danger"} icon={showDeleted ? <ArchiveRestore /> : <Trash2 />} onClick={() => setDeleting(task)}>{showDeleted ? "Restore" : "Delete"}</Button></td> : null}
         </tr>)}</tbody>
       </table></div> : <div className="flex gap-3 overflow-x-auto pb-3">{statuses.map(status => {
         const columnTasks = filtered.filter(task => task.status === status.value);
         return <section key={status.value} className="w-[260px] shrink-0 rounded-lg border border-line bg-canvas p-3" aria-label={`${status.label} tasks`}>
           <div className="mb-3 flex items-center justify-between"><div className="flex items-center gap-2"><Badge tone={statusTone[status.value]}>{status.label}</Badge><span className="font-mono text-xs text-fg-3">{columnTasks.length}</span></div></div>
           <div className="grid gap-2">{columnTasks.map(task => <article key={task.id} className="rounded-lg border border-line bg-surface p-3 shadow-sm">
-            <Link href={`/tasks/${task.id}`} className="text-sm font-semibold leading-snug hover:underline">{task.title}</Link>
+            {showDeleted ? <span className="text-sm font-semibold leading-snug">{task.title}</span> : <Link href={`/tasks/${task.id}`} className="text-sm font-semibold leading-snug hover:underline">{task.title}</Link>}
             <p className="mt-2 text-xs text-fg-3">{personName(task.accountableUserId)}{task.teamId ? ` · ${teamName(task.teamId) ?? "Team"}` : ""}</p>
-            <div className="mt-3 flex items-center justify-between gap-2"><Badge tone={task.priority === "urgent" ? "danger" : task.priority === "high" ? "warning" : "neutral"}>{label(task.priority)}</Badge>{quickTransitions(task).length ? <select aria-label={`Change status for ${task.title}`} value={task.status} onChange={e => changeStatus(task,e.target.value as TaskStatus)} className="max-w-28 rounded border border-line bg-canvas px-1.5 py-1 text-xs"><option value={task.status}>{label(task.status)}</option>{quickTransitions(task).map(next => <option key={next} value={next}>{label(next)}</option>)}</select> : null}</div>
+            <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><Badge tone={task.priority === "urgent" ? "danger" : task.priority === "high" ? "warning" : "neutral"}>{label(task.priority)}</Badge><div className="flex items-center gap-2">{!showDeleted && quickTransitions(task).length ? <select aria-label={`Change status for ${task.title}`} value={task.status} onChange={e => changeStatus(task,e.target.value as TaskStatus)} className="max-w-28 rounded border border-line bg-canvas px-1.5 py-1 text-xs"><option value={task.status}>{label(task.status)}</option>{quickTransitions(task).map(next => <option key={next} value={next}>{label(next)}</option>)}</select> : null}{canManage ? <Button size="sm" variant="ghost" className={showDeleted ? "text-accent-text" : "text-danger"} icon={showDeleted ? <ArchiveRestore /> : <Trash2 />} onClick={() => setDeleting(task)}>{showDeleted ? "Restore" : "Delete"}</Button> : null}</div></div>
           </article>)}</div>
         </section>;
       })}</div>) : <div className="py-12 text-center"><ListTodo className="mx-auto size-8 text-fg-3" /><p className="mt-3 font-semibold">No tasks found</p><p className="mt-1 text-sm text-fg-3">{query || statusFilter !== "all" ? "Try adjusting your search or filters." : "Tasks assigned to you or shared with your teams will appear here."}</p></div>}
     </Panel>
+    <ConfirmDialog
+      open={!!deleting}
+      onClose={() => !deleteBusy && setDeleting(null)}
+      onConfirm={deleteSelectedTask}
+      loading={deleteBusy}
+      title={`${showDeleted ? "Restore" : "Delete"} ${deleting?.title ?? "task"}?`}
+      confirmLabel={showDeleted ? "Restore task" : "Delete task"}
+      tone={showDeleted ? "primary" : "danger"}
+      consequence={showDeleted ? "The task will return to active task views. Its existing activity history and relationships are preserved." : "The task will be removed from active task views while its activity history is preserved. Tasks with active subtasks or dependencies must be unlinked first."}
+      error={error}
+    />
   </div>;
 }

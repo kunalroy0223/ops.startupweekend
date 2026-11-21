@@ -1,6 +1,6 @@
 "use client";
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, BellRing, ChevronsLeft, ChevronsRight, LogOut, Menu as MenuIcon, Monitor, Moon, Search, SlidersHorizontal, Sun, UserRound, X } from "lucide-react";
+import { Bell, BellRing, ChevronsLeft, ChevronsRight, LogOut, Menu as MenuIcon, Monitor, Moon, SlidersHorizontal, Sun, UserRound, X } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import { ROLE_LABEL, type Role } from "@/domain/types";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/cn";
 import { WiggleIcon } from "../motion/anime-fx";
+import { GlobalSearch } from "./global-search";
 import { Avatar } from "../ui/avatar";
 import { Menu, MenuItem } from "../ui/menu";
 import { CRUMB_LABEL, GROUP_LABEL, NAV } from "./nav-config";
@@ -55,7 +56,7 @@ export function AppShell({ nav, user, unread, children }: { nav: NavKey[]; user:
   const toggle = () => writeCollapsed(!collapsed);
 
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-dvh min-w-0 overflow-x-clip bg-canvas">
       {/* Desktop / tablet sidebar */}
       <aside className={cn("fixed inset-y-0 left-0 z-30 hidden flex-col border-r border-line bg-surface md:flex", collapsed ? "w-[72px]" : "w-[72px] lg:w-[248px]")} aria-label="Primary">
         <SidebarBody nav={nav} pathname={pathname} collapsed={collapsed} onToggle={toggle} />
@@ -76,9 +77,9 @@ export function AppShell({ nav, user, unread, children }: { nav: NavKey[]; user:
       ) : null}
       </AnimatePresence>
 
-      <div className={cn("flex min-h-dvh flex-col", collapsed ? "md:pl-[72px]" : "md:pl-[72px] lg:pl-[248px]")}>
-        <Topbar user={user} unread={unread} pathname={pathname} onMenu={() => setDrawer(true)} showNotifications={nav.includes("notifications")} showPeople={nav.includes("people")} />
-        <main id="main" className="mx-auto w-full max-w-[1440px] flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
+      <div className={cn("flex min-h-dvh min-w-0 flex-col overflow-x-clip", collapsed ? "md:pl-[72px]" : "md:pl-[72px] lg:pl-[248px]")}>
+        <Topbar user={user} unread={unread} pathname={pathname} onMenu={() => setDrawer(true)} showNotifications={nav.includes("notifications")} />
+        <main id="main" className="mx-auto min-w-0 w-full max-w-[1440px] flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
           {children}
         </main>
       </div>
@@ -158,7 +159,7 @@ function Breadcrumbs({ pathname }: { pathname: string }) {
   const crumbs = parts.map((p, i) => ({ href: "/" + parts.slice(0, i + 1).join("/"), label: CRUMB_LABEL[p] ?? (i > 0 ? "Details" : p) }));
   const shown = crumbs.filter((c, i) => !(c.label === "Workstream" || c.label === "Team") || i === crumbs.length - 1);
   return (
-    <nav aria-label="Breadcrumb" className="min-w-0">
+    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
       <ol className="flex items-center gap-1.5 truncate font-mono text-[11.5px] text-fg-3">
         <li className="max-sm:hidden">Inhub</li>
         {shown.map((c, i) => (
@@ -187,9 +188,8 @@ function setTheme(theme: "light" | "dark" | "system") {
   }
 }
 
-function Topbar({ user, unread, pathname, onMenu, showNotifications, showPeople }: { user: ShellUser; unread: number; pathname: string; onMenu: () => void; showNotifications: boolean; showPeople: boolean }) {
+function Topbar({ user, unread, pathname, onMenu, showNotifications }: { user: ShellUser; unread: number; pathname: string; onMenu: () => void; showNotifications: boolean }) {
   const router = useRouter();
-  const [q, setQ] = useState("");
   async function signOut() {
     await api("/api/auth/session", { method: "DELETE" }).catch(() => undefined);
     router.replace("/login?reason=signed_out");
@@ -202,20 +202,7 @@ function Topbar({ user, unread, pathname, onMenu, showNotifications, showPeople 
       </button>
       <Breadcrumbs pathname={pathname} />
       <div className="ml-auto flex items-center gap-1.5 sm:gap-2">
-        {showPeople ? (
-          <form
-            role="search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              router.push(`/people${q.trim() ? `?q=${encodeURIComponent(q.trim())}` : ""}`);
-            }}
-            className="relative hidden sm:block"
-          >
-            <label htmlFor="global-search" className="sr-only">Search people</label>
-            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-fg-3" aria-hidden />
-            <input id="global-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search people" className="h-9 w-44 rounded-[var(--radius-control)] border border-line bg-canvas pr-3 pl-9 text-[13px] placeholder:text-fg-3 transition-[width] duration-300 focus:w-60 focus:border-line-strong focus:outline-none lg:w-56" />
-          </form>
-        ) : null}
+        <GlobalSearch />
         {showNotifications ? (
           <Link href="/notifications" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"} className="relative grid size-9 place-items-center rounded-md text-fg-2 hover:bg-muted hover:text-fg">
             {unread ? (
