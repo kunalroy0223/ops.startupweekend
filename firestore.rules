@@ -67,6 +67,20 @@ service cloud.firestore {
       allow read: if isActive() && userId == uid();
     }
 
+    // CRM and automation are server-authoritative. All reads/writes go through
+    // API services that apply explicit CRM ownership and automation permissions.
+    match /crmAccounts/{id} { allow read, write: if false; }
+    match /crmContacts/{id} { allow read, write: if false; }
+    match /crmOpportunities/{id} { allow read, write: if false; }
+    match /crmCampaigns/{id} { allow read, write: if false; }
+    match /crmCampaignMembers/{id} { allow read, write: if false; }
+    match /crmActivities/{id} { allow read, write: if false; }
+    match /crmIdentityKeys/{id} { allow read, write: if false; }
+    match /automationRules/{id} { allow read, write: if false; }
+    match /automationRuns/{id} { allow read, write: if false; }
+    match /notificationDigestItems/{id} { allow read, write: if false; }
+    match /notificationDigests/{id} { allow read, write: if false; }
+
     // invitations, auditLogs, domainEvents, emailDeliveries, webhookReceipts,
     // rateLimits and anything not listed: server only.
     match /{document=**} {

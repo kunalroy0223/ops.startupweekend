@@ -49,7 +49,13 @@ export type Permission =
   | "structure.manage"
   | "settings.manage"
   | "audit.view_all"
-  | "notifications.administer";
+  | "notifications.administer"
+  | "automation.rules.view"
+  | "automation.rules.manage"
+  | "automation.runs.view_all"
+  | "automation.runs.view_scoped"
+  | "automation.runs.retry"
+  | "crm.administer";
 
 const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
   admin: new Set<Permission>([
@@ -64,6 +70,12 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
     "settings.manage",
     "audit.view_all",
     "notifications.administer",
+    "automation.rules.view",
+    "automation.rules.manage",
+    "automation.runs.view_all",
+    "automation.runs.view_scoped",
+    "automation.runs.retry",
+    "crm.administer",
   ]),
   // RBAC §4 default policy: delegated administration is NOT inferred from Lead.
   lead: new Set<Permission>(),
@@ -72,6 +84,27 @@ const ROLE_PERMISSIONS: Record<Role, ReadonlySet<Permission>> = {
 
 export function isActive(actor: Pick<Actor, "status"> | null | undefined): boolean {
   return actor?.status === "active";
+}
+
+/**
+ * Confirms that the request actor and the persisted user profile still describe
+ * an active user in the deployment's organisation. The profile is read by the
+ * server service layer; request payloads are never an authority for this data.
+ */
+export function canUseOrganization(
+  actor: Actor | null | undefined,
+  organizationId: string,
+  persistedProfile: { organizationId?: string; role?: Role; status?: UserStatus } | null | undefined,
+): boolean {
+  return Boolean(
+    actor &&
+    persistedProfile &&
+    isActive(actor) &&
+    actor.organizationId === organizationId &&
+    persistedProfile.organizationId === organizationId &&
+    persistedProfile.status === "active" &&
+    persistedProfile.role === actor.role
+  );
 }
 
 export function hasPermission(actor: Actor | null | undefined, permission: Permission): boolean {
@@ -211,6 +244,38 @@ export function decideStatusChange(
 
 /** Fields a user may change on their own profile (RBAC §6). */
 export const SELF_EDITABLE_PROFILE_FIELDS = ["displayName", "title", "photoURL"] as const;
+
+/**
+ * CRM access in this foundation is owner-based, in addition to organisation and
+ * workspace membership. Campaign assignment visibility is introduced alongside
+ * persisted campaign-member records in a later implementation phase.
+ */
+export interface CrmRecordAccess {
+  organizationId: string;
+  workspaceId: string;
+  ownerUserId: string;
+}
+
+export function canAccessCrmRecord(
+  actor: Actor | null | undefined,
+  workspaceIds: ReadonlySet<string>,
+  record: CrmRecordAccess,
+): boolean {
+  if (!actor || !isActive(actor) || actor.organizationId !== record.organizationId) return false;
+  if (actor.role === "admin") return true;
+  if (!workspaceIds.has(record.workspaceId)) return false;
+  // Campaign assignment visibility is deliberately not inferred here. It will
+  // be added with persisted CRM campaign membership records in the next phase.
+  return record.ownerUserId === actor.uid;
+}
+
+export function canManageCrmRecord(
+  actor: Actor | null | undefined,
+  workspaceIds: ReadonlySet<string>,
+  record: CrmRecordAccess,
+): boolean {
+  return canAccessCrmRecord(actor, workspaceIds, record);
+}
 
 // ── Navigation ───────────────────────────────────────────────────────────
 

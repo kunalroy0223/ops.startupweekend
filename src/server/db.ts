@@ -24,6 +24,17 @@ export const COL = {
   taskComments: "taskComments",
   taskActivity: "taskActivity",
   workReports: "workReports",
+  automationRules: "automationRules",
+  automationRuns: "automationRuns",
+  notificationDigestItems: "notificationDigestItems",
+  notificationDigests: "notificationDigests",
+  crmAccounts: "crmAccounts",
+  crmContacts: "crmContacts",
+  crmOpportunities: "crmOpportunities",
+  crmCampaigns: "crmCampaigns",
+  crmCampaignMembers: "crmCampaignMembers",
+  crmActivities: "crmActivities",
+  crmIdentityKeys: "crmIdentityKeys",
 } as const;
 
 export const SCHEMA_VERSION = 1;

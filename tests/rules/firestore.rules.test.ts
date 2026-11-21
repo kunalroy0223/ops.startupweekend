@@ -11,8 +11,23 @@ import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 let env: RulesTestEnvironment;
 
 beforeAll(async () => {
-  env = await initializeTestEnvironment({ projectId: "demo-inhub", firestore: { rules: readFileSync("firestore.rules", "utf8"), host: "127.0.0.1", port: 8085 } });
+  const projectId = process.env.FIRESTORE_RULES_TEST_PROJECT_ID ?? "demo-inhub";
+  const port = Number(process.env.FIRESTORE_RULES_TEST_PORT ?? "8085");
+
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("Invalid FIRESTORE_RULES_TEST_PORT");
+  }
+
+  env = await initializeTestEnvironment({
+    projectId,
+    firestore: {
+      rules: readFileSync("firestore.rules", "utf8"),
+      host: "127.0.0.1",
+      port
+    }
+  });
 });
+
 afterAll(async () => env?.cleanup());
 
 beforeEach(async () => {
@@ -86,6 +101,17 @@ describe("Firestore Security Rules", () => {
   });
   it("invitation token hashes are never readable by clients", async () => {
     await assertFails(getDoc(doc(as("admin"), "invitations/i1")));
+  });
+  it("CRM and automation collections remain server-only", async () => {
+    const db = as("admin");
+    for (const path of [
+      "crmAccounts/a1", "crmContacts/c1", "crmOpportunities/o1", "crmCampaigns/c1",
+      "crmCampaignMembers/m1", "crmActivities/a1", "crmIdentityKeys/k1",
+      "automationRules/r1", "automationRuns/r1", "notificationDigestItems/d1", "notificationDigests/d1",
+    ]) {
+      await assertFails(getDoc(doc(db, path)));
+      await assertFails(setDoc(doc(db, path), { organizationId: "inhub" }));
+    }
   });
   it("no client writes anywhere, even for Admin", async () => {
     await assertFails(setDoc(doc(as("admin"), "teams/t3"), { name: "x" }));

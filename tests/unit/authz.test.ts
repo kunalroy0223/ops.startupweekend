@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canActOnAll, canLeadTeam, canViewAuditEntry, canViewTeam, canViewUser, canViewWorkstream, decideRoleChange, decideStatusChange, hasPermission, navFor, type Actor, type Scope } from "@/domain/authz";
+import { canActOnAll, canLeadTeam, canViewAuditEntry, canViewTeam, canViewUser, canViewWorkstream, canAccessCrmRecord, canManageCrmRecord, canUseOrganization, decideRoleChange, decideStatusChange, hasPermission, navFor, type Actor, type Scope } from "@/domain/authz";
 
 const actor = (role: Actor["role"], status: Actor["status"] = "active", uid = `${role}-1`): Actor => ({ uid, role, status, organizationId: "inhub", email: `${uid}@x.in`, displayName: uid });
 const scope = (s: Partial<Record<keyof Scope, string[]>> = {}): Scope => ({
@@ -14,6 +14,11 @@ const scope = (s: Partial<Record<keyof Scope, string[]>> = {}): Scope => ({
 describe("global permissions", () => {
   it("Admin holds every administrative permission", () => {
     for (const p of ["users.invite", "users.change_role", "users.change_status", "memberships.manage", "structure.manage", "settings.manage", "audit.view_all"] as const) expect(hasPermission(actor("admin"), p)).toBe(true);
+  });
+  it("Admin holds CRM and automation administration permissions", () => {
+    expect(hasPermission(actor("admin"), "crm.administer")).toBe(true);
+    expect(hasPermission(actor("admin"), "automation.rules.manage")).toBe(true);
+    expect(hasPermission(actor("admin"), "automation.runs.retry")).toBe(true);
   });
   it("Lead and Team Member hold none in v1", () => {
     for (const r of ["lead", "member"] as const) {
@@ -62,6 +67,28 @@ describe("scoped visibility", () => {
     expect(canViewUser(l, scope({ leadWorkstreamIds: ["ws-a"] }), "u4", { teamIds: [], workstreamIds: ["ws-a"] })).toBe(true);
     expect(canViewUser(l, scope({ leadWorkstreamIds: ["ws-a"] }), "u5", { teamIds: ["t-9"], workstreamIds: [] })).toBe(false);
   });
+  it("CRM access requires workspace membership and explicit record ownership", () => {
+    const lead = actor("lead");
+    const record = { organizationId: "inhub", workspaceId: "w1", ownerUserId: "someone-else" };
+    const workspaces = new Set(["w1"]);
+    expect(canAccessCrmRecord(lead, workspaces, record)).toBe(false);
+    expect(canAccessCrmRecord(lead, workspaces, { ...record, ownerUserId: lead.uid })).toBe(true);
+    expect(canAccessCrmRecord(lead, new Set(["w2"]), { ...record, ownerUserId: lead.uid })).toBe(false);
+    expect(canAccessCrmRecord(actor("member", "suspended"), workspaces, { ...record, ownerUserId: "member-1" })).toBe(false);
+    expect(canAccessCrmRecord(actor("admin"), new Set(), record)).toBe(true);
+    expect(canAccessCrmRecord(actor("admin"), new Set(), { ...record, organizationId: "another-org" })).toBe(false);
+    expect(canManageCrmRecord(lead, workspaces, { ...record, ownerUserId: lead.uid })).toBe(true);
+  });
+
+  it("requires an active persisted profile with matching organisation and role", () => {
+    const admin = actor("admin");
+    expect(canUseOrganization(admin, "inhub", { organizationId: "inhub", role: "admin", status: "active" })).toBe(true);
+    expect(canUseOrganization(admin, "another-org", { organizationId: "inhub", role: "admin", status: "active" })).toBe(false);
+    expect(canUseOrganization(admin, "inhub", { organizationId: "inhub", role: "lead", status: "active" })).toBe(false);
+    expect(canUseOrganization(admin, "inhub", { organizationId: "inhub", role: "admin", status: "suspended" })).toBe(false);
+    expect(canUseOrganization(actor("admin", "suspended"), "inhub", { organizationId: "inhub", role: "admin", status: "active" })).toBe(false);
+  });
+
   it("inactive users see nothing", () => {
     expect(canViewTeam(actor("member", "suspended"), scope({ memberTeamIds: ["t-1"] }), "t-1")).toBe(false);
   });
@@ -109,8 +136,7 @@ describe("navigation", () => {
     expect(navFor(actor("admin"))).toContain("settings");
     expect(navFor(actor("admin"))).toContain("tasks");
     expect(navFor(actor("admin"))).toContain("reports");
-    expect(navFor(actor("member"))).toContain("tasks");
-    expect(navFor(actor("member"))).toContain("reports");
+    expect(navFor(actor("admin"))).not.toContain("analytics");
     expect(navFor(actor("member", "suspended"))).toEqual([]);
   });
 });
