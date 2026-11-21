@@ -23,7 +23,17 @@ const admin: Actor = {
   displayName: "Admin",
 };
 
-const profile = (overrides: Partial<{ organizationId: string; role: Actor["role"]; status: Actor["status"] }> = {}) => ({
+const profile = (
+  overrides: Partial<{
+    organizationId: string;
+    role: Actor["role"];
+    status: Actor["status"];
+  }> = {}
+): {
+  organizationId: string;
+  role: Actor["role"];
+  status: Actor["status"];
+} => ({
   organizationId: "inhub",
   role: "admin",
   status: "active",
