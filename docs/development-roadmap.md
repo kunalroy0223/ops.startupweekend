@@ -1,6 +1,6 @@
 # Inhub Workspace — Development Roadmap
 
-**Status:** Draft v1.0  
+**Status:** Draft v1.1 — two-module delivery cycles added
 **Approach:** Incremental, vertical-slice delivery with CI/CD
 
 ---
@@ -21,12 +21,14 @@
 |---|---|---|
 | 0 — Engineering foundation | Repository audit, app shell, CI, environments, Firebase setup | Reliable technical baseline |
 | 1 — Platform foundation & administration | Authentication, RBAC, people, workspaces/workstreams/teams, audit, notification foundation | Admin can establish and administer the organisation |
-| 2 — Task & project management | Projects, tasks, Kanban/list views, comments, document links, workflow | Work can be assigned and tracked |
+| 2 — Task & project management | Projects, tasks, Kanban/list views, comments, attachments, workflow | Work can be assigned and tracked |
 | 3 — Work reports & timesheets | Daily reports, entries, review and approval | Work execution can be documented and reviewed |
 | 4 — Dashboards & analytics | Team, workstream and personal reporting | Operational status becomes measurable |
 | 5 — Notifications & automation | Digests, reminders, scheduled rules and triggers | Routine follow-up is automated |
 
 Notification infrastructure begins in Release 1. Later releases add event types and automation.
+
+> **Numbering clarification (2026-11-21):** the `Release 0–5` labels above are the original chronological delivery-release sequence, not the product-module numbers used in the current 12-module product catalogue. In the product catalogue, **Module 4 is Notifications & Workflow Automation**, **Module 7 is Analytics & Performance Dashboard**, and **Module 9 is Partnerships, Stakeholder & Outreach CRM**. The historical `Release 4 — Dashboards & analytics` therefore maps to product Module 7; historical `Release 5 — Notifications & automation` is the initial delivery foundation for product Module 4. New planning and implementation documents use product-module numbers to avoid ambiguity.
 
 ## 3. Release 0 — Engineering foundation
 
@@ -140,7 +142,7 @@ Notification infrastructure begins in Release 1. Later releases add event types 
 - Board/Kanban view and list/table view.
 - Filters and search.
 - Subtasks and dependencies.
-- Comments, mentions and document/reference links.
+- Comments, mentions and attachments.
 - Task activity timeline.
 - Task-specific email and in-app events.
 
@@ -148,7 +150,7 @@ Notification infrastructure begins in Release 1. Later releases add event types 
 
 - Users see only tasks within their permitted scope.
 - Task ownership and status transitions are enforced server-side.
-- Comments and document/reference links inherit task permissions.
+- Comments and attachments inherit task permissions.
 - Task activity is auditable.
 - Board and list views stay in sync.
 - Due-date and assignment notifications are tested.
@@ -333,7 +335,7 @@ Implemented in the current repository:
 
 Still to implement before Module 2 can be considered complete:
 - Task detail view and full edit experience.
-- Comments, @mentions, document links and reference references.
+- Comments, @mentions, attachments and reference links.
 - Dependency and subtask management with cycle prevention.
 - Review/revision detail experience and reopen/cancel reason capture.
 - Comprehensive authorization integration tests and production emulator verification.
@@ -350,7 +352,7 @@ The current working tree now contains the following vertical slices. These are i
 - Task register with list and Kanban views, search, status, project and priority filters.
 - Task detail with role-aware status transitions, required cancellation/reopen reasons, parent-task and dependency links with cycle checks.
 - Task comments, validated mentions, reference links and a task activity timeline.
-- Task document/reference URLs and work-report deliverable links are validated and stored in Firestore; binary files remain in approved external storage.
+- Firebase Storage attachment upload/download using short-lived signed URLs; file type and size are checked server-side.
 - Task assignment, status and comment/mention notifications through the transactional outbox. Participants and scoped Leads receive in-app activity updates; explicitly mentioned users may also receive email.
 - Task due dates and times are interpreted, stored and displayed in the organisation's configured timezone, independent of the browser timezone.
 
@@ -370,12 +372,49 @@ The current working tree now contains the following vertical slices. These are i
 - TypeScript/TSX syntax parsing completed with no parse diagnostics in the current source tree.
 - Full `npm run check`, emulator tests and a production build remain pending. The execution environment could not complete dependency installation; see the delivery note accompanying the source archive.
 - The current Firebase JS SDK lockfile includes packages requiring Node.js `>=24.12.0`; `package.json` and the lockfile now target Node.js `24.x`. Configure the same major version in Vercel and use 24.12.0+ locally.
-- Task and report file uploads are intentionally out of scope; Firestore stores external document URLs only.
+- Task and report attachments require `FIREBASE_STORAGE_BUCKET`, bucket-level permissions for the Firebase Admin service account and the CORS configuration in `storage.cors.json`.
 - Deploy the updated Firestore indexes before exercising the Admin report list in production.
 
 
 ### Release 2 and Release 3 implementation note — 20 November 2026
 
-The current codebase now contains the initial vertical slices for both releases: project/task management, scoped task collaboration and external document references, plus daily work reports with entry drafts, task links, time logging, immutable submission versions, Lead/Admin review, revision requests, review history and event-driven notifications. Task and report document references are URL values stored in Firestore; binary files are not uploaded to the platform.
+The current codebase now contains the initial vertical slices for both releases: project/task management, scoped task collaboration and attachments, plus daily work reports with entry drafts, task links, time logging, immutable submission versions, Lead/Admin review, revision requests, review history and event-driven notifications. Report entries support report-level attachments that can be associated with individual entries.
 
-The implementation is source-complete for the listed features, but the exit criteria below remain gated on installing dependencies and running the full check suite on the declared Node 24 runtime, Firebase Emulator tests and production smoke testing. This note does not mark the releases production-verified.
+The implementation is source-complete for the listed features, but the exit criteria below remain gated on installing dependencies and running the full check suite on the declared Node 24 runtime, Firebase Emulator tests, Storage bucket/CORS configuration, and production smoke testing. This note does not mark the releases production-verified.
+
+
+## Product-module delivery cycles — 21 November 2026
+
+The product roadmap is being executed in **two-module cycles**. Each cycle shares requirements, schema, permission and integration design before implementation. Modules may be delivered in smaller vertical slices, but the paired architecture must be agreed first.
+
+### Cycle 1 — Modules 4 and 9 (current)
+
+- **Module 4 — Notifications & Workflow Automation:** retain the existing outbox/in-app/Resend foundation; add scheduled reminders, validated automation rules, execution history and complete daily digest delivery.
+- **Module 9 — Partnerships, Stakeholder & Outreach CRM:** one shared account/contact/activity database, partnership opportunities, campaigns, Instagram outreach, assigned follow-ups and relationship history.
+- **Integration:** CRM follow-up work uses the existing Module 2 task system; Module 4 generates reminders and notifications for assigned internal users. CRM never sends unsolicited external messages automatically.
+- **Specification files:** `docs/module-4-notifications-automation.md` and `docs/module-9-crm-specification.md`.
+- **Schema/RBAC references:** `docs/database-schema.md`, `docs/rbac-matrix.md` and `docs/notification-specification.md`.
+
+### Proposed subsequent cycles (subject to dependency review)
+
+| Cycle | Pair | Shared rationale |
+|---|---|---|
+| 2 | Modules 5 + 8 — Knowledge Base & Documentation; Meetings & Calendar | Meeting agendas/minutes, documents, attachments, calendar events and follow-up actions share document and scheduling primitives. |
+| 3 | Modules 6 + 10 — Member & Team Management; Event & Programme Management | Event staffing, volunteer assignments, participant-facing operations and role-based event workspaces depend on member/team capabilities. |
+| 4 | Modules 7 + 11 — Analytics & Performance Dashboard; Resource & Asset Management | Resource allocation and usage records create measurable operational data for the analytics layer. |
+| 5 | Module 12 — Administration, Audit & Governance | Complete governance controls, retention/records management, administrative oversight and cross-module hardening after the preceding modules establish their data lifecycles. |
+
+The final Module 12 is intentionally shown as a consolidation cycle because the remaining product-module count is odd. It must still be scoped as a coherent release, not an indefinite cleanup task.
+
+## Cycle 1 delivery gates
+
+Do not begin production implementation of Module 4/9 collections until:
+
+- [ ] Module 4 rule defaults, task reminder timing and digest send time are approved.
+- [ ] Work-report reminder policy is explicitly defined or the rule remains disabled.
+- [ ] CRM categories, pipeline stages, owner/assignment permissions and do-not-contact override policy are approved.
+- [ ] The CRM's first-release workspace sharing model is confirmed.
+- [ ] Proposed indexes and Firestore server-only access strategy are reviewed.
+- [ ] Migrations/backfills are written for any change to existing document IDs or fields; no current notification preference IDs are silently changed.
+
+The proposed Module 4 and Module 9 specifications are design artifacts only. Their proposed collections, events, screens, indexes and permissions are not implemented or production-deployed until their respective delivery slices pass the cross-release quality gates in §9.

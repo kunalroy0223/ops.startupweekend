@@ -1,6 +1,6 @@
 # Inhub Workspace — Role-Based Access Control Matrix
 
-**Status:** Draft v1.0  
+**Status:** Draft v1.1 — Modules 4 and 9 proposed permission extensions
 **Model:** Global role + resource scope + action permission
 
 ---
@@ -70,7 +70,7 @@ Legend:
 | Change task status | Full | Scoped | Own assigned task, allowed transitions only |
 | Delete tasks | Full, preferably soft-delete | No by default | No |
 | Comment/mention | Full | Scoped | Accessible task only |
-| Add document/reference links | Full | Scoped | Accessible task/report only |
+| Add attachments | Full | Scoped | Accessible task/report only |
 | View work reports | Full | Scoped | Own reports |
 | Submit work reports | Full | Own report if also acting as a member | Own reports |
 | Review/approve reports | Full | Scoped reports | No |
@@ -110,7 +110,7 @@ A user may access a task when one or more of these conditions is true:
 - They are a collaborator explicitly added to the task.
 - The task is shared with a team to which they have active membership.
 
-Task comments and document/reference links inherit the parent task's access. Direct access by guessed IDs must be denied.
+Task comments and attachments inherit the parent task's access. Direct access by guessed IDs must be denied.
 
 ### 5.6 Report scope
 
@@ -128,7 +128,7 @@ By default, the assignee may update:
 
 - Status, within permitted transitions.
 - Progress summary, if enabled.
-- Comments and task document/reference links.
+- Comments and task attachments.
 - Time/work log references, when the reporting module is released.
 
 The assignee may not change:
@@ -175,7 +175,7 @@ Do not store only a role in a client-controlled custom claim and trust it indefi
 - [ ] Admin can access all workstreams, teams, projects, tasks and reports.
 - [ ] Client cannot create or modify audit logs.
 - [ ] Client cannot mark email deliveries as sent.
-- [ ] Task comments and document/reference links inherit task permissions.
+- [ ] Task comments and attachments inherit task permissions.
 - [ ] Cross-team task operation checks every affected scope.
 
 ## 10. Decisions to revisit
@@ -226,3 +226,81 @@ Lead is deliberately **not** given delegated administration in v1 (draft §4 def
 ### A.4 Security tests (§9)
 
 Covered by `tests/unit/authz.test.ts`, `tests/unit/security.test.ts`, `tests/rules/firestore.rules.test.ts` and the emulator end-to-end run (`npm run test:e2e`): Team Member invite → 403, self role change → 403, role smuggling → rejected, Team Member structure create → 403, CSRF → rejected, cross-team URL → not found with no data, deactivated user → signed out and cannot sign in.
+
+## 4A. Module 4 — automation and notification permissions
+
+The current `notifications.administer` permission remains the baseline for organisation-wide notification administration. The following are proposed permissions and must be added to the central permission model before use:
+
+| Permission | Admin | Lead | Team Member |
+|---|---|---|---|
+| `automation.rules.view` | Full | Read rules relevant to their assigned scope, if exposed | No |
+| `automation.rules.manage` | Full | No in v1 | No |
+| `automation.runs.view_all` | Full | No | No |
+| `automation.runs.view_scoped` | Full | Scoped to records/campaigns they are authorised to manage | Own/assigned target summary only, if exposed |
+| `automation.runs.retry` | Full | No in v1 | No |
+| `notifications.preferences.manage_own` | Own | Own | Own |
+| `notifications.administer` | Full | No | No |
+
+Rules are registered in server code. Admin may enable/disable a supported rule and change validated settings. A Lead cannot create arbitrary workflows or change organisation-wide schedules. A user can change their own non-essential notification preferences; essential account/security events cannot be muted.
+
+Automation run history may expose resource names and error codes but must not expose secrets, full payloads or private CRM message content. Retrying a run is a privileged operation and must respect the original idempotency key and provider ambiguity policy.
+
+## 4B. Module 9 — CRM permission matrix
+
+CRM access is not automatically organisation-wide for every Lead or Team Member. It combines global role, workspace/team/workstream scope, record owner, campaign ownership and campaign-member assignment.
+
+| CRM resource/action | Admin | Lead | Team Member |
+|---|---|---|---|
+| View all CRM accounts/contacts | Full | No, unless explicitly within assigned scope | No |
+| View account/contact assigned to self | Full | Scoped | Own/assigned |
+| Create account/contact | Full | Within assigned CRM scope | Within an assigned active campaign; new record is assigned to the creator until reassigned |
+| Edit assigned account/contact | Full | Scoped | Own/assigned, permitted fields only |
+| Archive account/contact | Full | No by default | No |
+| Set `doNotContact` | Full | Scoped | Assigned record; this action is allowed to prevent unwanted outreach |
+| Override `doNotContact` | Full with reason and audit | No | No |
+| Create/manage campaigns | Full | Within assigned CRM scope if made campaign owner | No by default |
+| View campaign | Full | Assigned/owned campaign | Campaign to which assigned |
+| Assign/reassign campaign members | Full | Within scope, if campaign owner | No; may accept assigned records only |
+| Log activity | Full | Scoped | Assigned record/campaign only |
+| Edit/delete activity | No direct editing; correction event only | No direct editing; correction event only | No direct editing; correction event only |
+| View opportunities | Full | Scoped/owned | Only explicitly linked/assigned opportunity |
+| Create/update opportunity stage | Full | Scoped/owned | Only if explicitly assigned and permitted by campaign policy; no financial terms by default |
+| Export CRM data | Full, audited | No in v1 | No |
+| Merge duplicate records | Full, audited | No in v1 | No |
+| View campaign metrics | Full | Scoped campaigns | Assigned campaign summary only |
+
+### CRM scope evaluation
+
+A non-Admin can read a CRM record only when all organisation/workspace checks pass and at least one explicit relationship grants access:
+
+- The user is the record owner or is assigned as an authorised supporting user.
+- The user owns/manages the campaign and the record is a campaign member in that campaign.
+- The user is the assigned owner of the relevant `crmCampaignMembers` record.
+- A future explicit team/workstream sharing permission grants access; membership alone must not make every CRM record visible.
+
+A Lead's normal team/workstream access does not automatically grant CRM access. CRM permissions must be checked by dedicated server helpers in addition to `canViewTeam`/`canViewWorkstream`.
+
+### CRM field and lifecycle safeguards
+
+- Team Members may update interaction notes, campaign stage and next-step metadata only on assigned records and within validated transitions.
+- Team Members cannot change record owner, organisation/workspace scope, bulk-export, merge, edit pipeline configuration or alter an opportunity's financial values.
+- `doNotContact` can be set by an assigned operator immediately; clearing it requires Admin permission, a reason and an audit record.
+- Activities are append-only. A correction creates a new activity; no ordinary user can rewrite history.
+- Archiving a contact/account does not delete activities, campaign membership history, opportunities or linked tasks.
+- Every bulk action validates each selected record; partial success must be reported clearly and audited per affected record.
+
+### Required CRM security tests
+
+- [ ] Team Member cannot read a contact assigned to another member without an explicit shared campaign permission.
+- [ ] Lead cannot read CRM records outside their CRM ownership/campaign scope even if they belong to the same team.
+- [ ] Member cannot reassign a campaign member or change campaign owner.
+- [ ] Member can set `doNotContact` on an assigned prospect but cannot clear it.
+- [ ] Direct API requests and guessed IDs cannot bypass CRM scope checks.
+- [ ] Admin can export/merge only through an audited privileged action.
+- [ ] CRM activity records cannot be updated/deleted by clients or ordinary service actions.
+- [ ] CRM-linked tasks enforce both task authorization and CRM context visibility.
+- [ ] A removed campaign member loses CRM access on the next server-authorised request.
+
+## 4C. System-generated audit records
+
+Scheduled automation actions have no human actor. New audit entries should include `actorType: "system"` and a stable system actor identifier (for example `actorUserId: "system"`) plus the automation rule/run reference. Existing user-generated audit records remain compatible. Do not attribute automated actions to the Admin who last configured the rule.

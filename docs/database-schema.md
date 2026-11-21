@@ -1,6 +1,6 @@
 # Inhub Workspace — Firestore Database Schema
 
-**Status:** Draft v1.0  
+**Status:** Draft v1.1 — Modules 4 and 9 proposed extensions
 **Database:** Cloud Firestore  
 **Schema style:** Top-level collections with explicit organisation/workspace references
 
@@ -298,6 +298,11 @@ interface Task {
   dueAt?: Timestamp;
   acceptanceCriteria?: string[];
   parentTaskId?: string;
+  /** CRM context: at most one primary account/contact/opportunity reference. */
+  crmContextType?: "account" | "contact" | "opportunity";
+  crmContextId?: string;
+  crmCampaignId?: string;
+  crmCampaignMemberId?: string;
   startAt?: Timestamp;
   completedAt?: Timestamp;
   blockedReason?: string;
@@ -332,6 +337,7 @@ Use subcollections for potentially unbounded data:
 
 - `tasks/{taskId}/comments/{commentId}`
 - `tasks/{taskId}/activity/{activityId}`
+- `tasks/{taskId}/attachments/{attachmentId}`
 - `tasks/{taskId}/participants/{userId}` (optional if collaborator arrays become large)
 
 Comment example:
@@ -382,6 +388,7 @@ interface WorkReportEntry {
   blockers?: string[];
   nextSteps?: string[];
   linkUrls?: string[];
+  attachmentIds?: string[];
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
@@ -405,6 +412,8 @@ interface Notification {
   resourceId?: string;
   actionUrl?: string;
   readAt?: Timestamp;
+  /** Set when email preference is daily_digest; inbox and digest queue are independent. */
+  digestPending?: boolean;
   createdAt: Timestamp;
 }
 ```
@@ -419,7 +428,7 @@ interface NotificationPreferences {
   userId: string;
   inAppEnabled: boolean;
   emailEnabled: boolean;
-  deliveryMode: "immediate" | "daily_digest";
+  deliveryMode: "immediate" | "daily_digest" | "off";
   disabledEventTypes: string[];
   updatedAt: Timestamp;
 }
@@ -444,6 +453,7 @@ interface DomainEvent {
   createdAt: Timestamp;
   processedAt?: Timestamp;
   attempts: number;
+  leaseUntil?: Timestamp;
   lastErrorCode?: string;
 }
 ```
@@ -456,8 +466,10 @@ Keep payloads minimal and avoid sensitive content. Use transactions to write the
 interface EmailDelivery {
   organizationId: string;
   eventId: string;
-  recipientUserId: string;
+  recipientUserId?: string;
+  recipientKey?: string;
   recipientEmail: string;
+  eventType?: string;
   templateId: string;
   provider: "resend";
   providerMessageId?: string;
@@ -466,6 +478,7 @@ interface EmailDelivery {
   attempts: number;
   lastAttemptAt?: Timestamp;
   nextRetryAt?: Timestamp;
+  leaseUntil?: Timestamp;
   lastErrorCode?: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -493,14 +506,332 @@ interface AuditLog {
 
 Audit logs are written only by trusted server code. They are append-only for application users. Define retention, export and backup policy before production.
 
-### 4.21 Document and reference links
+### 4.21 `attachments/{attachmentId}`
 
-Inhub Workspace stores external document references as validated HTTP(S) URLs on their parent Firestore records:
+```ts
+interface Attachment {
+  organizationId: string;
+  workspaceId: string;
+  storagePath: string;
+  originalFileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedBy: string;
+  parentType: "task" | "work_report" | "user_profile";
+  parentId: string;
+  status: "pending_scan" | "available" | "rejected";
+  createdAt: Timestamp;
+}
+```
 
-- `tasks/{taskId}.referenceLinks[]` — task specifications, shared documents and deliverables.
-- `workReports/{reportId}/entries/{entryId}.linkUrls[]` — documents and deliverables relevant to a work entry.
+Storage path access must be authorised against the parent resource. Do not expose public URLs by default.
 
-The application stores link values only. Binary file contents, upload metadata and signed download URLs are not stored in Firestore. Files remain in an organisation-approved external document store, and its sharing permissions are managed by the file owner.
+### 4.22 `automationRules/{ruleId}` — proposed Module 4 collection
+
+Stores enabled state and bounded configuration for server-owned rule templates. Users cannot upload arbitrary executable rules or expressions.
+
+```ts
+interface AutomationRule {
+  organizationId: string;
+  workspaceId?: string;
+  ruleKey: string;                 // registered in server code, e.g. task_due_soon
+  triggerType: "domain_event" | "scheduled_query";
+  enabled: boolean;
+  config: Record<string, string | number | boolean | string[] | null>;
+  schemaVersion: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+Document IDs should be deterministic per organisation and rule key. A rule configuration is validated against a code-owned Zod schema before it is read or changed. Admin-only in v1.
+
+### 4.23 `automationRuns/{runId}` — proposed Module 4 collection
+
+One execution record per rule, target, recipient and scheduled occurrence. Use a deterministic hashed document ID derived from those values; never use the worker invocation time as the deduplication key.
+
+```ts
+interface AutomationRun {
+  organizationId: string;
+  workspaceId?: string;
+  ruleId: string;
+  ruleKey: string;
+  targetType: string;
+  targetId: string;
+  recipientUserId: string;
+  occurrenceKey: string;            // stable due-time bucket or organisation-local schedule date
+  idempotencyKey: string;
+  status: "pending" | "processing" | "completed" | "skipped" | "retry" | "failed";
+  attempts: number;
+  leaseUntil?: Timestamp;
+  nextRetryAt?: Timestamp;
+  domainEventId?: string;
+  lastErrorCode?: string;
+  startedAt?: Timestamp;
+  completedAt?: Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+A completed run means that the downstream domain event or digest batch was durably created. Email delivery success remains tracked separately in `emailDeliveries`.
+
+### 4.24 `notificationDigestItems/{itemId}` — proposed Module 4 collection
+
+A digest item is independent of the in-app inbox so a user can disable in-app notifications and still receive an enabled email digest.
+
+```ts
+interface NotificationDigestItem {
+  organizationId: string;
+  recipientUserId: string;
+  eventId: string;
+  eventType: string;
+  title: string;
+  body: string;
+  resourceType?: string;
+  resourceId?: string;
+  actionUrl?: string;
+  status: "pending" | "batched" | "sent" | "skipped";
+  digestId?: string;
+  createdAt: Timestamp;
+  includedAt?: Timestamp;
+}
+```
+
+Use deterministic item IDs based on event + recipient. Store only the summary and safe action metadata needed to render a digest; do not store secret payloads or full private message bodies.
+
+### 4.25 `notificationDigests/{digestId}` — proposed Module 4 collection
+
+One digest batch per recipient, organisation and digest date/window.
+
+```ts
+interface NotificationDigest {
+  organizationId: string;
+  recipientUserId: string;
+  digestDate: string;               // YYYY-MM-DD in organisation timezone
+  timezone: string;
+  periodStart: Timestamp;
+  periodEnd: Timestamp;
+  itemCount: number;
+  eventId: string;                  // synthetic DAILY_NOTIFICATION_DIGEST outbox event
+  emailDeliveryId?: string;
+  status: "queued" | "sent" | "failed";
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+Keep item membership in `notificationDigestItems.digestId`; do not create an unbounded array of notification IDs. The digest event and email delivery reuse the existing transactional outbox and Resend delivery machinery.
+
+### 4.26 `crmAccounts/{accountId}` — proposed Module 9 collection
+
+An external organisation/business/institution. The first CRM release is workspace-scoped; organisation-wide shared records can be added later with an explicit visibility model.
+
+```ts
+interface CrmAccount {
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  normalizedName: string;
+  accountType: "company" | "startup" | "institution" | "investor" | "government" | "nonprofit" | "community" | "other";
+  industry?: string;
+  website?: string;
+  websiteDomainNormalized?: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  ownerUserId: string;
+  source?: string;
+  tags: string[];
+  status: "active" | "archived";
+  notes?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  archivedAt?: Timestamp;
+  schemaVersion: number;
+}
+```
+
+Do not embed contacts/opportunities as unbounded arrays. Use `accountId` references from those records.
+
+### 4.27 `crmContacts/{contactId}` — proposed Module 9 collection
+
+A person or external outreach profile. A social profile may exist without a known natural person's identity.
+
+```ts
+interface CrmContact {
+  organizationId: string;
+  workspaceId: string;
+  recordType: "person" | "creator_profile" | "brand_profile" | "community_profile" | "other";
+  displayName: string;
+  normalizedName: string;
+  accountId?: string;
+  email?: string;
+  emailNormalized?: string;
+  phone?: string;
+  instagramHandleNormalized?: string;
+  instagramProfileUrl?: string;
+  linkedinProfileUrl?: string;
+  category?: string;
+  ownerUserId: string;
+  source?: string;
+  tags: string[];
+  doNotContact: boolean;
+  doNotContactReason?: string;
+  doNotContactSetBy?: string;
+  doNotContactSetAt?: Timestamp;
+  status: "active" | "archived";
+  notes?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  archivedAt?: Timestamp;
+  schemaVersion: number;
+}
+```
+
+Do not require email or phone. Normalise Instagram handles on the server (strip leading `@`, normalise case and whitespace). Avoid collecting sensitive personal data or storing private message bodies by default.
+
+### 4.28 `crmOpportunities/{opportunityId}` — proposed Module 9 collection
+
+A specific partnership or stakeholder engagement. Monetary value is optional because not all Inhub relationships are commercial.
+
+```ts
+interface CrmOpportunity {
+  organizationId: string;
+  workspaceId: string;
+  title: string;
+  opportunityType: "sponsorship" | "institutional_partnership" | "mentor" | "speaker" | "judge" | "community" | "collaboration" | "other";
+  accountId?: string;
+  primaryContactId?: string;
+  pipelineKey: "partnership";
+  stageKey: string;
+  status: "open" | "won" | "lost" | "nurture" | "archived";
+  ownerUserId: string;
+  supportingUserIds: string[];
+  expectedValue?: number;
+  currency?: string;
+  contributionDescription?: string;
+  expectedDecisionAt?: Timestamp;
+  nextStep?: string;
+  outcomeReason?: string;
+  sourceCampaignId?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  stageChangedAt: Timestamp;
+  archivedAt?: Timestamp;
+  schemaVersion: number;
+}
+```
+
+Each stage transition must also create an append-only CRM activity and audit record.
+
+### 4.29 `crmCampaigns/{campaignId}` — proposed Module 9 collection
+
+```ts
+interface CrmCampaign {
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  objective: string;
+  campaignType: "partnership_acquisition" | "instagram_outreach" | "mentor_acquisition" | "community_engagement" | "other";
+  channel: "instagram" | "email" | "phone" | "in_person" | "event" | "referral" | "other";
+  ownerUserId: string;
+  workstreamId?: string;
+  teamId?: string;
+  startAt?: Timestamp;
+  endAt?: Timestamp;
+  status: "draft" | "active" | "paused" | "completed" | "archived";
+  tags: string[];
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  archivedAt?: Timestamp;
+  schemaVersion: number;
+}
+```
+
+The campaign record stores its objective and ownership. Contact membership and member assignment live in `crmCampaignMembers`.
+
+### 4.30 `crmCampaignMembers/{membershipId}` — proposed Module 9 collection
+
+One contact's participation in one campaign. Use a deterministic ID based on `campaignId + contactId` to prevent duplicate membership in that campaign.
+
+```ts
+interface CrmCampaignMember {
+  organizationId: string;
+  workspaceId: string;
+  campaignId: string;
+  contactId: string;
+  assignedToUserId: string;
+  stage: "researched" | "qualified" | "ready_to_contact" | "contacted" | "replied" | "interested" | "converted" | "nurture" | "not_interested" | "do_not_contact";
+  firstContactAt?: Timestamp;
+  lastInteractionAt?: Timestamp;
+  nextFollowUpAt?: Timestamp;
+  linkedFollowUpTaskId?: string;
+  convertedAt?: Timestamp;
+  outcomeReason?: string;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
+The follow-up task remains the source of truth for actionable work. When linked, keep `nextFollowUpAt` synchronised or derive it from the task; do not schedule duplicate reminders from both records.
+
+### 4.31 `crmActivities/{activityId}` — proposed Module 9 collection
+
+Append-only relationship history.
+
+```ts
+interface CrmActivity {
+  organizationId: string;
+  workspaceId: string;
+  accountId?: string;
+  contactId?: string;
+  opportunityId?: string;
+  campaignId?: string;
+  campaignMemberId?: string;
+  actorUserId: string;
+  activityType: "researched" | "qualified" | "initial_outreach" | "reply_received" | "follow_up_sent" | "call" | "meeting" | "proposal_shared" | "stage_changed" | "outcome_recorded" | "note" | "correction";
+  correctsActivityId?: string;   // Required when activityType is "correction".
+  channel: "instagram" | "email" | "phone" | "meeting" | "in_person" | "internal" | "other";
+  direction?: "inbound" | "outbound" | "internal";
+  occurredAt: Timestamp;
+  summary: string;
+  outcome?: string;
+  requestId?: string;
+  createdAt: Timestamp;
+}
+```
+
+Ordinary users cannot update/delete activity records. Corrections append a new activity referencing the corrected activity ID. Sensitive text must not be copied into audit logs.
+
+### 4.32 `crmIdentityKeys/{identityKeyId}` — proposed Module 9 collection
+
+Deterministic duplicate guard for unique identifiers. The document ID is a SHA-256 hash of organisation + workspace + identifier type + normalised identifier; do not expose raw email/handle values in the document ID.
+
+```ts
+interface CrmIdentityKey {
+  organizationId: string;
+  workspaceId: string;
+  identityType: "email" | "instagram_handle" | "website_domain";
+  entityType: "contact" | "account";
+  entityId: string;
+  createdAt: Timestamp;
+}
+```
+
+A duplicate returns the existing canonical record for review; it does not silently merge records. Archived entities keep their identity keys until an authorised merge/retention operation explicitly resolves them.
 
 ## 5. Index plan
 
@@ -529,6 +860,30 @@ Create indexes based on actual query patterns. Expected composite indexes includ
 
 The final index definitions must be generated from implemented queries and committed in `firestore.indexes.json`. Do not assume every index above is required if no corresponding query exists.
 
+### 5.1 Proposed Module 4 and Module 9 indexes
+
+Add only after query shapes are implemented and emulator tests confirm them. Candidate composite indexes:
+
+| Collection | Fields | Query purpose |
+|---|---|---|
+| `automationRuns` | `organizationId`, `status`, `nextRetryAt` | Due/retryable automation runs. |
+| `automationRuns` | `organizationId`, `createdAt` descending | Admin run history. |
+| `notificationDigestItems` | `organizationId`, `recipientUserId`, `status`, `createdAt` | Pending digest items for one recipient. |
+| `crmAccounts` | `organizationId`, `workspaceId`, `status`, `normalizedName` | Account directory/search. |
+| `crmContacts` | `organizationId`, `workspaceId`, `status`, `normalizedName` | Contact directory/search. |
+| `crmContacts` | `organizationId`, `workspaceId`, `ownerUserId`, `updatedAt` descending | Assigned contact queue. |
+| `crmOpportunities` | `organizationId`, `workspaceId`, `status`, `stageChangedAt` descending | Pipeline views. |
+| `crmOpportunities` | `organizationId`, `workspaceId`, `ownerUserId`, `status`, `updatedAt` descending | Owner's opportunities. |
+| `crmCampaigns` | `organizationId`, `workspaceId`, `status`, `startAt` | Campaign list. |
+| `crmCampaignMembers` | `organizationId`, `campaignId`, `stage`, `updatedAt` descending | Campaign pipeline. |
+| `crmCampaignMembers` | `organizationId`, `assignedToUserId`, `stage`, `nextFollowUpAt` | Member outreach queue. |
+| `crmCampaignMembers` | `organizationId`, `contactId`, `updatedAt` descending | Contact's campaign history. |
+| `crmActivities` | `organizationId`, `contactId`, `occurredAt` descending | Contact timeline. |
+| `crmActivities` | `organizationId`, `opportunityId`, `occurredAt` descending | Opportunity timeline. |
+| `crmActivities` | `organizationId`, `campaignId`, `occurredAt` descending | Campaign activity. |
+
+`crmIdentityKeys` uses deterministic document lookup and should not need a compound query index in v1.
+
 ## 6. Security rules guidance
 
 - Deny reads/writes by default.
@@ -536,7 +891,7 @@ The final index definitions must be generated from implemented queries and commi
 - Users cannot change `role`, `status`, membership assignments or Admin-only settings from the client.
 - Leads can read only assigned resource scopes.
 - Members can read only permitted work and team-shared resources.
-- Task comments and document/reference links inherit task access.
+- Task comments and attachments inherit task access.
 - Users can only create/update their own draft reports; submitted reports are immutable to the author until returned for revision.
 - Clients cannot write `auditLogs`, `domainEvents` processing state or `emailDeliveries`.
 - For server code using Firebase Admin SDK, explicitly call the authorization service because rules are bypassed.
@@ -558,7 +913,7 @@ Be mindful of Firestore transaction limits and document size. Use background pro
 - Deactivated users remain referenced by historical tasks, reports and audit logs.
 - Archived teams/workstreams/projects remain queryable for authorised historical views.
 - Deletion should be exceptional and governed by an explicit retention policy.
-- Set retention and cleanup policy for expired invitations, email delivery metadata, notifications and audit logs before production.
+- Set retention and cleanup policy for expired invitations, email delivery metadata, notifications, attachments and audit logs before production.
 - Back up production Firestore data and document recovery procedures.
 
 ## 9. Required files in the repository
@@ -600,7 +955,7 @@ Added (not in the draft):
 | `webhookReceipts/{provider_eventId}` | Deduplicates Resend webhook deliveries (created with `create()`, so a replay fails with ALREADY_EXISTS and is ignored). |
 | `rateLimits/{key}` | Server-side throttle for password-reset requests (no account enumeration, no mail bombing). |
 
-Not yet implemented (later modules): `projects`, `projectTeams`, `tasks`, `taskDependencies`, task subcollections and `workReports`.
+Not yet implemented (later modules): `projects`, `projectTeams`, `tasks`, `taskDependencies`, task subcollections, `workReports`, `attachments`.
 
 ### A.2 Field and ID decisions
 
@@ -654,8 +1009,9 @@ Task subcollections:
 
 - `tasks/{taskId}/comments/{commentId}` — author, body, validated `mentionedUserIds` and creation time.
 - `tasks/{taskId}/activity/{activityId}` — actor, action, summary and creation time; written with the associated mutation where supported.
+- `tasks/{taskId}/attachments/{attachmentId}` — metadata only (uploader, filename, content type, byte size, Storage path and state). File bytes live in Firebase Storage, not Firestore.
 
-Parent-task and dependency relationships are checked for self-reference and circular paths by the trusted task service. Task reference URLs are stored on the task document and displayed only to users already authorised to access that task.
+Parent-task and dependency relationships are checked for self-reference and circular paths by the trusted task service. Attachments are staged as `pending`, verified against Cloud Storage object metadata, then marked `active`; download URLs are short-lived and generated only after task authorization.
 
 ### B.2 Daily work reports
 
@@ -663,8 +1019,19 @@ Parent-task and dependency relationships are checked for self-reference and circ
 
 Nested subcollections:
 
-- `entries/{entryId}` — optional `taskId`, `activityTitle`, `workCompleted`, optional `progressSummary`, optional `timeSpentMinutes`, `blockers[]`, `nextSteps[]`, `linkUrls[]`, `createdAt` and `updatedAt`. Reference URLs point to files stored outside Inhub Workspace; no file contents are uploaded to Firestore.
+- `entries/{entryId}` — optional `taskId`, `activityTitle`, `workCompleted`, optional `progressSummary`, optional `timeSpentMinutes`, `blockers[]`, `nextSteps[]`, `linkUrls[]`, optional `attachmentIds[]`, `createdAt` and `updatedAt`.
+- `attachments/{attachmentId}` — `reportId`, `workspaceId`, `uploadedBy`, `fileName`, `contentType`, `size`, `storagePath`, upload `status`, and timestamps. Files use short-lived signed Storage URLs; signed URLs are not stored in Firestore.
 - `versions/{version}` — immutable submission snapshot containing `version`, `submittedBy`, `submittedAt` and the entries as they existed at submission time.
 - `reviews/{reviewId}` — append-only review record containing `reviewerId`, `decision`, optional `comment`, the reviewed `version` and `createdAt`.
 
 Authors may edit entries only while the report is `draft` or `needs_revision`. Submitting creates a version snapshot and locks the report. A reviewer must be an Admin or a Lead assigned to the report’s team/workstream and cannot review their own report. Revision requests require a comment. Time spent is optional and is not treated as attendance or as proof of working hours.
+
+
+## Module 4 and Module 9 specification update — 21 November 2026
+
+The detailed proposed requirements are in:
+
+- `docs/module-4-notifications-automation.md`
+- `docs/module-9-crm-specification.md`
+
+The additions in sections 4.22–4.32 are **proposed schema only**. They are not implemented collections, deployed indexes or Firestore Rules. Before implementation, update `src/domain/types.ts`, `src/server/db.ts`, validation schemas, `firestore.rules`, `firestore.indexes.json` and emulator tests together. Deploy indexes/rules only after review and a migration/backfill plan where needed.
