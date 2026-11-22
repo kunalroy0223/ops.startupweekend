@@ -1,4 +1,4 @@
-import { Bell, Boxes, Building2, ChartColumn, FileText, FolderKanban, GitBranch, History, LayoutDashboard, ListChecks, Network, Settings, Target, Users, type LucideIcon } from "lucide-react";
+import { Bell, Boxes, Building2, CalendarDays, ChartColumn, FileText, FolderKanban, GitBranch, History, LayoutDashboard, ListChecks, Network, Settings, Target, Users, type LucideIcon } from "lucide-react";
 import type { NavKey } from "@/domain/authz";
 
 export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon; group: "work" | "organisation" | "you" }> = {
@@ -7,6 +7,7 @@ export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon
   tasks: { href: "/tasks", label: "Tasks", icon: ListChecks, group: "work" },
   projects: { href: "/projects", label: "Projects", icon: FolderKanban, group: "work" },
   reports: { href: "/reports", label: "Work Reports", icon: FileText, group: "work" },
+  calendar: { href: "/calendar", label: "Meetings & Calendar", icon: CalendarDays, group: "work" },
   crm: { href: "/crm", label: "CRM", icon: Building2, group: "work" },
   automation: { href: "/automation", label: "Automation", icon: GitBranch, group: "work" },
   analytics: { href: "/analytics", label: "Analytics", icon: ChartColumn, group: "work" },
@@ -25,6 +26,7 @@ export const CRUMB_LABEL: Record<string, string> = {
   workspaces: "Workspaces",
   structure: "Workstreams & Teams",
   projects: "Projects",
+  calendar: "Calendar",
   tasks: "Tasks",
   crm: "CRM",
   automation: "Automation",

@@ -30,8 +30,8 @@ export function PageHeader({ eyebrow, title, description, actions, meta, icon, c
 
 export function SectionHeading({ title, count, action, id, icon }: { title: string; count?: number; action?: ReactNode; id?: string; icon?: ReactNode }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <h2 id={id} className="flex items-center gap-2 text-[15px] font-bold">
+    <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-3">
+      <h2 id={id} className="flex min-w-0 flex-wrap items-center gap-2 text-[15px] font-bold">
         {icon ? <span className="grid size-6 place-items-center rounded-md bg-accent-soft text-accent-text [&_svg]:size-3.5" aria-hidden>{icon}</span> : null}
         {title}
         {count !== undefined ? <span className="font-mono text-xs font-medium text-fg-3 tabular">{count}</span> : null}
@@ -43,7 +43,7 @@ export function SectionHeading({ title, count, action, id, icon }: { title: stri
 
 export function Panel({ children, className, as = "section", ...rest }: { children: ReactNode; className?: string; as?: "section" | "div" | "aside"; "aria-labelledby"?: string }) {
   return (
-    <MotionSection as={as} className={cn("rounded-[var(--radius-panel)] border border-line bg-surface p-5", className)} {...rest}>
+    <MotionSection as={as} className={cn("min-w-0 max-w-full rounded-[var(--radius-panel)] border border-line bg-surface p-4 sm:p-5", className)} {...rest}>
       {children}
     </MotionSection>
   );

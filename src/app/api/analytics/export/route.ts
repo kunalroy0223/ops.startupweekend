@@ -23,6 +23,10 @@ export const GET = route(async (req) => {
     ["Due in 7 days", data.tasks.dueSoon],
     ["Blocked tasks", data.tasks.blocked],
     ["Completed in period", data.tasks.completedInRange],
+    ["Low priority tasks", data.tasks.priorities.low],
+    ["Medium priority tasks", data.tasks.priorities.medium],
+    ["High priority tasks", data.tasks.priorities.high],
+    ["Urgent priority tasks", data.tasks.priorities.urgent],
     ["Active projects", data.projects.active],
     ["Reports visible", data.reports.visible],
     ["Reports submitted in period", data.reports.submittedInRange],
@@ -30,6 +34,13 @@ export const GET = route(async (req) => {
     ["Reports approved", data.reports.approved],
     ["Reports needing revision", data.reports.needsRevision],
   ];
+  for (const member of data.memberWorkload) {
+    rows.push([`Member ${member.name} — role`, member.role]);
+    rows.push([`Member ${member.name} — owned open tasks`, member.ownedOpen]);
+    rows.push([`Member ${member.name} — collaborating open tasks`, member.collaboratingOpen]);
+    rows.push([`Member ${member.name} — completed tasks`, member.completed]);
+    rows.push([`Member ${member.name} — overdue tasks`, member.overdue]);
+  }
   for (const group of [...data.teamWorkload, ...data.workstreamWorkload]) {
     rows.push([`${group.kind}: ${group.name} — people`, group.people]);
     rows.push([`${group.kind}: ${group.name} — tasks`, group.tasks]);
@@ -37,9 +48,19 @@ export const GET = route(async (req) => {
     rows.push([`${group.kind}: ${group.name} — in progress`, group.inProgress]);
     rows.push([`${group.kind}: ${group.name} — completed`, group.completed]);
   }
+  for (const project of data.projects.rows) {
+    rows.push([`Project ${project.name} — tasks`, project.tasks]);
+    rows.push([`Project ${project.name} — progress (%)`, project.progress]);
+    rows.push([`Project ${project.name} — overdue`, project.overdue]);
+  }
   for (const point of data.completionAndReportingTrend) {
+    rows.push([`Trend ${point.label} — tasks created`, point.createdTasks]);
     rows.push([`Trend ${point.label} — task completions`, point.completedTasks]);
     rows.push([`Trend ${point.label} — report submissions`, point.submittedReports]);
+  }
+  for (const cell of data.activityHeatmap) {
+    rows.push([`Activity ${cell.date} — tasks completed`, cell.completedTasks]);
+    rows.push([`Activity ${cell.date} — reports submitted`, cell.submittedReports]);
   }
   const body = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
   return new Response(`\uFEFF${body}`, {

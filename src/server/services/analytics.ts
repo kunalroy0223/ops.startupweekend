@@ -5,11 +5,27 @@ import type { Actor } from "@/domain/authz";
 import type { WorkReport } from "@/domain/types";
 import { col, fromDoc } from "../db";
 import { serverEnv } from "../env";
-import { listStructure } from "../queries";
+import { listDirectory, listStructure } from "../queries";
 import { listProjects, listTasks } from "./tasks";
 import { canReviewReport, listMyReports } from "./work-reports";
 
 const org = () => serverEnv().ORGANIZATION_ID;
+
+async function allVisibleDirectoryMembers(actor: Actor) {
+  if (actor.role === "member") {
+    return [{ uid: actor.uid, name: actor.displayName, role: actor.role }];
+  }
+  const members: { uid: string; name: string; role: "admin" | "lead" | "member" }[] = [];
+  let cursor: string | undefined;
+  // Keep analytics bounded while supporting organisations larger than one directory page.
+  for (let pageNumber = 0; pageNumber < 40; pageNumber++) {
+    const page = await listDirectory(actor, { cursor });
+    members.push(...page.users.filter((user) => user.status === "active").map(({ uid, displayName, role }) => ({ uid, name: displayName, role })));
+    if (!page.nextCursor) break;
+    cursor = page.nextCursor;
+  }
+  return members;
+}
 
 async function reportsVisibleTo(actor: Actor): Promise<{ reports: WorkReport[]; reviewQueueCount: number }> {
   if (actor.role === "member") {
@@ -45,11 +61,12 @@ export async function getAnalyticsOverview(
   rangeDays: 30 | 90,
   timeZone = "Asia/Kolkata",
 ): Promise<AnalyticsSnapshot> {
-  const [tasks, projects, structure, reportData] = await Promise.all([
+  const [tasks, projects, structure, reportData, members] = await Promise.all([
     listTasks(actor),
     listProjects(actor),
     listStructure(actor),
     reportsVisibleTo(actor),
+    allVisibleDirectoryMembers(actor),
   ]);
 
   return buildAnalyticsSnapshot({
@@ -60,6 +77,7 @@ export async function getAnalyticsOverview(
     reviewQueueCount: reportData.reviewQueueCount,
     teams: structure.teams.map(({ id, name, memberCount }) => ({ id, name, memberCount })),
     workstreams: structure.workstreams.map(({ id, name, memberCount }) => ({ id, name, memberCount })),
+    members,
     rangeDays,
     timeZone,
   });

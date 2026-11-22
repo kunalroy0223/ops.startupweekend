@@ -36,7 +36,7 @@ function build(role: "admin" | "lead" | "member", tasks: Task[], reports: WorkRe
   });
 }
 
-describe("Module 4 analytics aggregation", () => {
+describe("Module 7 analytics aggregation", () => {
   it("counts status, overdue, due-soon and completed-in-range work", () => {
     const snapshot = build("admin", [
       task({ id: "overdue", status: "in_progress", dueAt: new Date(NOW - DAY).toISOString() }),
@@ -72,6 +72,34 @@ describe("Module 4 analytics aggregation", () => {
     expect(snapshot.workstreamWorkload[0]).toMatchObject({ name: "Demo", tasks: 1 });
   });
 
+  it("builds member workload from owned, collaborating and overdue tasks without ranking people", () => {
+    const snapshot = buildAnalyticsSnapshot({
+      actor: { uid: "admin", role: "admin" },
+      tasks: [
+        task({ id: "owned-open", accountableUserId: "member-1", dueAt: new Date(NOW - DAY).toISOString() }),
+        task({ id: "collab-open", accountableUserId: "member-2", collaboratorUserIds: ["member-1"] }),
+        task({ id: "owned-done", accountableUserId: "member-1", status: "completed" }),
+      ],
+      projects: [], reports: [], reviewQueueCount: 0, teams: [], workstreams: [],
+      members: [{ uid: "member-1", name: "A Member", role: "member" }, { uid: "member-2", name: "B Member", role: "lead" }],
+      rangeDays: 30, nowMs: NOW,
+    });
+    expect(snapshot.memberWorkload.find((row) => row.uid === "member-1")).toMatchObject({ ownedOpen: 1, collaboratingOpen: 1, completed: 1, overdue: 1 });
+    expect(snapshot.memberWorkload).toHaveLength(2);
+  });
+
+  it("limits member workload visibility to the signed-in Team Member", () => {
+    const snapshot = buildAnalyticsSnapshot({
+      actor: { uid: "member-1", role: "member" },
+      tasks: [task({ id: "self", accountableUserId: "member-1" }), task({ id: "other", accountableUserId: "member-2" })],
+      projects: [], reports: [], reviewQueueCount: 0, teams: [], workstreams: [],
+      members: [{ uid: "member-1", name: "Current member", role: "member" }, { uid: "member-2", name: "Another member", role: "member" }],
+      rangeDays: 30, nowMs: NOW,
+    });
+    expect(snapshot.memberWorkload).toHaveLength(1);
+    expect(snapshot.memberWorkload[0]?.uid).toBe("member-1");
+  });
+
   it("aggregates report status and submission trends without inventing a compliance rate", () => {
     const snapshot = build("admin", [task()], [
       report({ id: "submitted", status: "submitted", userId: "other" }),
@@ -84,5 +112,24 @@ describe("Module 4 analytics aggregation", () => {
     expect(snapshot.reports.needsRevision).toBe(1);
     expect(snapshot.reports.awaitingReview).toBe(1);
     expect(snapshot.reports.activeReportingPeriods).toBeGreaterThan(0);
+  });
+});
+
+describe("analytics visualisation datasets", () => {
+  it("builds priority, project-progress and daily activity series from real records", () => {
+    const completedAt = new Date(NOW - 2 * DAY).toISOString();
+    const snapshot = build("admin", [
+      task({ id: "urgent-done", projectId: "project-1", status: "completed", priority: "urgent", completedAt }),
+      task({ id: "high-open", projectId: "project-1", status: "in_progress", priority: "high", dueAt: new Date(NOW + DAY).toISOString() }),
+    ], [report({ submittedAt: completedAt })]);
+
+    expect(snapshot.tasks.priorities).toEqual({ low: 0, medium: 0, high: 1, urgent: 1 });
+    expect(snapshot.completionAndReportingTrend.reduce((sum, point) => sum + point.createdTasks, 0)).toBe(2);
+    expect(snapshot.completionAndReportingTrend.reduce((sum, point) => sum + point.completedTasks, 0)).toBe(1);
+    expect(snapshot.projects.rows[0]).toMatchObject({ tasks: 2, completed: 1, inProgress: 1, progress: 50 });
+    const activeDay = snapshot.activityHeatmap.find((cell) => cell.date === completedAt.slice(0, 10));
+    expect(activeDay?.completedTasks).toBe(1);
+    expect(activeDay?.submittedReports).toBe(1);
+    expect(activeDay?.total).toBe(2);
   });
 });

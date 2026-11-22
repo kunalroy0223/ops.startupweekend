@@ -23,6 +23,8 @@ export const EVENT_TYPES = [
   "TASK_OVERDUE",
   "CRM_FOLLOW_UP_DUE",
   "CRM_REPLY_WAITING",
+  "MEETING_INVITED",
+  "MEETING_RESPONSE_UPDATED",
 ] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
@@ -135,6 +137,22 @@ export const EVENT_CATALOGUE: Record<EventType, EventMeta> = {
     essential: false,
     channels: { inApp: true, email: true },
     productModule: 9,
+  },
+  MEETING_INVITED: {
+    label: "Meeting invitations",
+    description: "You were invited to a meeting or an existing meeting changed.",
+    category: "work",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 8,
+  },
+  MEETING_RESPONSE_UPDATED: {
+    label: "Meeting responses",
+    description: "An attendee responded to a meeting invitation.",
+    category: "work",
+    essential: false,
+    channels: { inApp: true, email: true },
+    productModule: 8,
   },
 };
 

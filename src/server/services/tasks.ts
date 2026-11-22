@@ -238,7 +238,7 @@ export async function listTasks(actor: Actor, includeArchived = false): Promise<
 export async function createTask(actor: Actor, input: {
   workspaceId: string; projectId?: string; workstreamId?: string; teamId?: string; title: string;
   description?: string; acceptanceCriteria?: string; accountableUserId: string; collaboratorUserIds: string[];
-  priority: "low" | "medium" | "high" | "urgent"; dueAt?: string; parentTaskId?: string; dependencyIds: string[]; referenceLinks?: string[];
+  priority: "low" | "medium" | "high" | "urgent"; startAt?: string; dueAt?: string; parentTaskId?: string; dependencyIds: string[]; referenceLinks?: string[];
 }, requestId: string): Promise<string> {
   if (!isAdmin(actor) && !input.teamId && !input.workstreamId && !input.projectId) throw forbidden("Associate this task with a project, team or workstream within your scope.");
   let teamId = input.teamId;
@@ -288,12 +288,12 @@ export async function createTask(actor: Actor, input: {
       workstreamId: workstreamId ?? null, teamId: teamId ?? null, title: input.title,
       description: input.description ?? null, acceptanceCriteria: input.acceptanceCriteria ?? null,
       accountableUserId: input.accountableUserId, collaboratorUserIds: [...new Set(input.collaboratorUserIds.filter(x => x !== input.accountableUserId))],
-      status, priority: input.priority, dueAt: input.dueAt ? Timestamp.fromDate(new Date(input.dueAt)) : null,
+      status, priority: input.priority, startAt: input.startAt ? Timestamp.fromDate(new Date(input.startAt)) : null, dueAt: input.dueAt ? Timestamp.fromDate(new Date(input.dueAt)) : null,
       parentTaskId: input.parentTaskId ?? null, dependencyIds: [...new Set(input.dependencyIds)], referenceLinks: [...new Set(input.referenceLinks ?? [])],
       createdBy: actor.uid, updatedBy: actor.uid, createdAt: now(), updatedAt: now(), archivedAt: null,
     });
     recordTaskActivity(tx, ref.id, actor.uid, "created", `${actor.displayName} created this task`);
-    writeAudit(tx, { actorUserId: actor.uid, action: "task.created", resourceType: "task", resourceId: ref.id, subjectUserIds: [input.accountableUserId, ...input.collaboratorUserIds], workspaceId: input.workspaceId, after: { title: input.title, status, priority: input.priority, accountableUserId: input.accountableUserId, teamId: teamId ?? null, workstreamId: workstreamId ?? null }, requestId });
+    writeAudit(tx, { actorUserId: actor.uid, action: "task.created", resourceType: "task", resourceId: ref.id, subjectUserIds: [input.accountableUserId, ...input.collaboratorUserIds], workspaceId: input.workspaceId, after: { title: input.title, status, priority: input.priority, accountableUserId: input.accountableUserId, teamId: teamId ?? null, workstreamId: workstreamId ?? null, startAt: input.startAt ?? null, dueAt: input.dueAt ?? null }, requestId });
     enqueueEvent(tx, { eventType: "TASK_ASSIGNED", actorUserId: actor.uid, resourceType: "task", resourceId: ref.id, workspaceId: input.workspaceId, payload: { taskId: ref.id, userId: input.accountableUserId, title: input.title, teamId: teamId ?? null, workstreamId: workstreamId ?? null } });
   });
   return ref.id;
@@ -353,7 +353,11 @@ export async function updateTask(actor: Actor, id: string, input: Record<string,
     for (const key of ["title","description","acceptanceCriteria","accountableUserId","collaboratorUserIds","priority","teamId","workstreamId","projectId","parentTaskId","dependencyIds","referenceLinks"] as const) {
       if (key in input) patch[key] = input[key] ?? null;
     }
+    if ("startAt" in input) patch.startAt = input.startAt ? Timestamp.fromDate(new Date(String(input.startAt))) : null;
     if ("dueAt" in input) patch.dueAt = input.dueAt ? Timestamp.fromDate(new Date(String(input.dueAt))) : null;
+    const effectiveStart = "startAt" in input ? (input.startAt ? Date.parse(String(input.startAt)) : null) : (task.startAt ? Date.parse(task.startAt) : null);
+    const effectiveDue = "dueAt" in input ? (input.dueAt ? Date.parse(String(input.dueAt)) : null) : (task.dueAt ? Date.parse(task.dueAt) : null);
+    if (effectiveStart !== null && effectiveDue !== null && effectiveStart > effectiveDue) throw new ApiError(422, "invalid_schedule", "The planned start must be before the due date.");
     if ("parentTaskId" in input || "dependencyIds" in input) await assertTaskRelationships(actor, id, task.workspaceId, typeof input.parentTaskId === "string" ? input.parentTaskId : undefined, Array.isArray(input.dependencyIds) ? input.dependencyIds as string[] : task.dependencyIds);
     if (patch.accountableUserId && !await activeUser(String(patch.accountableUserId))) throw new ApiError(422, "invalid_assignee", "Choose an active Inhub user.");
     if (Array.isArray(patch.collaboratorUserIds)) {
@@ -398,7 +402,7 @@ export async function updateTask(actor: Actor, id: string, input: Record<string,
     }
     tx.update(ref, patch);
     recordTaskActivity(tx, id, actor.uid, "updated", `${actor.displayName} updated task details`);
-    writeAudit(tx, { actorUserId: actor.uid, action: "task.updated", resourceType: "task", resourceId: id, subjectUserIds: [task.accountableUserId, ...(typeof patch.accountableUserId === "string" ? [patch.accountableUserId] : [])], workspaceId: task.workspaceId, before: { title: task.title, priority: task.priority, dueAt: task.dueAt ?? null }, after: { ...patch }, requestId });
+    writeAudit(tx, { actorUserId: actor.uid, action: "task.updated", resourceType: "task", resourceId: id, subjectUserIds: [task.accountableUserId, ...(typeof patch.accountableUserId === "string" ? [patch.accountableUserId] : [])], workspaceId: task.workspaceId, before: { title: task.title, priority: task.priority, startAt: task.startAt ?? null, dueAt: task.dueAt ?? null }, after: { ...patch }, requestId });
     if (typeof patch.accountableUserId === "string" && patch.accountableUserId !== task.accountableUserId) {
       enqueueEvent(tx, { eventType: "TASK_ASSIGNED", actorUserId: actor.uid, resourceType: "task", resourceId: id, workspaceId: task.workspaceId, payload: {
         taskId: id, userId: patch.accountableUserId, previousUserId: task.accountableUserId,

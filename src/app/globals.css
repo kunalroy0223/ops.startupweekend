@@ -161,6 +161,24 @@
 }
 
 @layer base {
+  /* Prevent intrinsic-width descendants from expanding the application canvas on phones. */
+  #main, #main > *, #main :where(section, article, header, aside, nav, form) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #main > * {
+    width: 100%;
+  }
+  /* Grid and flex items default to min-width:auto, which can widen a page
+     beyond a phone viewport when labels, controls or SVGs have intrinsic size.
+     Keep explicit min-w-* utilities intact for contained horizontal scrollers. */
+  #main :where(.grid, .flex):not([class*="min-w-"]) {
+    min-width: 0;
+    max-width: 100%;
+  }
+  #main :where(img, svg, canvas, video) {
+    max-width: 100%;
+  }
   html {
     width: 100%;
     max-width: 100%;
@@ -214,6 +232,7 @@
 @layer components {
   /* Display type: Archivo at 125% width, the wide heavy grotesk of design.webp. */
   .display {
+    overflow-wrap: anywhere;
     font-family: var(--font-display);
     font-stretch: 125%;
     font-weight: 800;

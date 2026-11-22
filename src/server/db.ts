@@ -20,6 +20,7 @@ export const COL = {
   webhookReceipts: "webhookReceipts",
   rateLimits: "rateLimits",
   projects: "projects",
+  meetings: "meetings",
   tasks: "tasks",
   taskComments: "taskComments",
   taskActivity: "taskActivity",

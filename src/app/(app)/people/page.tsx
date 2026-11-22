@@ -8,6 +8,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { Badge, RoleBadge, UserStatusBadge } from "@/components/ui/badge";
 import { LinkButton } from "@/components/ui/button";
 import { PageHeader, SectionHeading } from "@/components/ui/page-header";
+import { Metric, MetricRow } from "@/components/ui/metric";
 import { EmptyState } from "@/components/ui/states";
 import { Table, Td, Th, Tr } from "@/components/ui/table";
 import { hasPermission, isAdmin } from "@/domain/authz";
@@ -15,7 +16,7 @@ import { ROLE_LABEL } from "@/domain/types";
 import { userListQuerySchema } from "@/domain/validation";
 import { formatDate, relativeTime } from "@/lib/format";
 import { emailConfigured } from "@/server/env";
-import { getOrganization, listDirectory, listInvitations, listStructure, listWorkspaces } from "@/server/queries";
+import { getMemberManagementSnapshot, getOrganization, listDirectory, listInvitations, listStructure, listWorkspaces } from "@/server/queries";
 import { requireActive } from "@/server/session";
 
 export const metadata: Metadata = { title: "People" };
@@ -26,7 +27,7 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
   const parsed = userListQuerySchema.safeParse(raw);
   const query = parsed.success ? parsed.data : {};
   const admin = isAdmin(actor);
-  const [page, invitations, org] = await Promise.all([listDirectory(actor, query), listInvitations(actor), getOrganization()]);
+  const [page, invitations, org, memberSummary] = await Promise.all([listDirectory(actor, query), listInvitations(actor), getOrganization(), getMemberManagementSnapshot(actor)]);
   const tz = org?.timezone;
   const canInvite = hasPermission(actor, "users.invite");
   const [workspaces, structure] = canInvite ? await Promise.all([listWorkspaces(actor), listStructure(actor)]) : [[], { workstreams: [], teams: [] }];
@@ -51,6 +52,23 @@ export default async function PeoplePage({ searchParams }: { searchParams: Promi
           ) : null
         }
       />
+
+      {admin && memberSummary ? (
+        <section aria-label="Member and team overview" className="grid min-w-0 gap-3">
+          <div><p className="eyebrow">MODULE 6 · MEMBER & TEAM MANAGEMENT</p><p className="mt-1 text-xs text-fg-2">Organisation roster and membership coverage. Counts describe assignments, not individual performance.</p></div>
+          <MetricRow className="rounded-xl border border-line bg-surface p-3 sm:p-4">
+            <Metric label="Active people" value={memberSummary.activePeople} hint={`${memberSummary.totalPeople} accounts total`} />
+            <Metric label="Leads" value={memberSummary.activeLeads} />
+            <Metric label="Team Members" value={memberSummary.activeMembers} />
+            <Metric label="Admins" value={memberSummary.activeAdmins} />
+            <Metric label="Active teams" value={memberSummary.activeTeams} />
+            <Metric label="Workstreams" value={memberSummary.activeWorkstreams} />
+            <Metric label="Without a team" value={memberSummary.activePeopleWithoutTeam} hint="Active non-Admin accounts" />
+            <Metric label="Team assignments" value={memberSummary.activeTeamAssignments} />
+            <Metric label="Workstream assignments" value={memberSummary.activeWorkstreamAssignments} />
+          </MetricRow>
+        </section>
+      ) : null}
 
       <section aria-labelledby="directory" className="grid w-full min-w-0 max-w-full gap-4">
         <h2 id="directory" className="sr-only">Directory</h2>

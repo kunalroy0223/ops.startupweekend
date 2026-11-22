@@ -4,6 +4,13 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { serverEnv } from "./env";
 
+// Local Firebase Emulator development does not run on Google Cloud. Prevent
+// google-auth-library/gcp-metadata from probing the GCE metadata endpoint.
+// This is deliberately scoped to emulator mode and has no production effect.
+if (process.env.USE_FIREBASE_EMULATORS === "true") {
+  process.env.METADATA_SERVER_DETECTION = "none";
+}
+
 /**
  * Firebase Admin SDK. Admin access BYPASSES Firestore Security Rules, so every
  * caller must authorise explicitly through src/domain/authz.ts first.

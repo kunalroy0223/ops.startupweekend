@@ -23,6 +23,13 @@ describe("notification channel policy", () => {
       expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
     }
   });
+  it("registers Module 8 meeting invitation notifications", () => {
+    for (const type of ["MEETING_INVITED", "MEETING_RESPONSE_UPDATED"] as const) {
+      expect(EVENT_TYPES).toContain(type);
+      expect(EVENT_CATALOGUE[type].productModule).toBe(8);
+      expect(resolveChannels(type, DEFAULT_PREFERENCES)).toEqual({ inApp: true, email: "immediate" });
+    }
+  });
   it("registers CRM follow-up and reply-waiting notifications", () => {
     for (const type of ["CRM_FOLLOW_UP_DUE", "CRM_REPLY_WAITING"] as const) {
       expect(EVENT_TYPES).toContain(type);

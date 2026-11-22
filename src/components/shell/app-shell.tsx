@@ -79,7 +79,7 @@ export function AppShell({ nav, user, unread, children }: { nav: NavKey[]; user:
 
       <div className={cn("box-border flex min-h-dvh w-full min-w-0 max-w-full flex-col overflow-x-clip", collapsed ? "md:pl-[72px]" : "md:pl-[72px] lg:pl-[248px]")}>
         <Topbar user={user} unread={unread} pathname={pathname} onMenu={() => setDrawer(true)} showNotifications={nav.includes("notifications")} />
-        <main id="main" className="mx-auto box-border min-w-0 w-full max-w-[1440px] flex-1 px-4 pt-6 pb-16 sm:px-6 lg:px-10 lg:pt-8">
+        <main id="main" className="mx-auto box-border min-w-0 w-full max-w-[1440px] flex-1 overflow-x-clip px-3 pt-5 pb-16 sm:px-6 sm:pt-6 lg:px-10 lg:pt-8">
           {children}
         </main>
       </div>
