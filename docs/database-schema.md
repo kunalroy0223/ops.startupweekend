@@ -1,6 +1,6 @@
 # Inhub Workspace — Firestore Database Schema
 
-**Status:** Draft v1.1 — Modules 4 and 9 proposed extensions
+**Status:** Draft v1.2 — Modules 4, 9–12 data contracts
 **Database:** Cloud Firestore  
 **Schema style:** Top-level collections with explicit organisation/workspace references
 
@@ -1065,3 +1065,32 @@ interface Meeting {
 ```
 
 Server-side meeting mutations write audit records and outbox events atomically. The browser does not write meeting documents directly. The application currently supports a maximum of 30 attendees per meeting and a maximum duration of 12 hours.
+
+
+## 4.20 `programmes/{programmeId}` — Module 10
+
+Stores a workspace programme with `organizationId`, `workspaceId`, `name`, `programmeType`, optional `description`, `ownerUserId`, optional `workstreamId`/`teamId`, optional `startAt`/`endAt`, lifecycle `draft | active | completed | archived`, creation/update actor and timestamps, optional `archivedAt`, and `schemaVersion`. Scope IDs must reference active records in the same workspace.
+
+## 4.21 `operationalEvents/{eventId}` — Module 10
+
+Stores an internal event operation with `organizationId`, `workspaceId`, optional `programmeId`, title/type, description, ISO start/end instants, organisation `timeZone`, venue or meeting URL, owner, optional workstream/team, lifecycle `planning | confirmed | live | completed | cancelled | archived`, operations notes and audit metadata.
+
+## 4.22 `programmeSessions/{sessionId}` — Module 10
+
+Stores run-of-show/agenda entries with organisation/workspace/programme references, optional event reference, title/description, start/end instants, optional facilitator/location, status `planned | live | completed | cancelled`, order, actor and timestamps. Session and event/programme links must remain within one workspace.
+
+## 4.23 `managedResources/{resourceId}` — Module 11
+
+Stores a tracked asset or shared resource with organisation/workspace, kind, name/category, optional description/inventory/serial/location, `totalQuantity`, optional custodian, condition, lifecycle `available | maintenance | retired | archived`, optional workstream/team scope, notes, `allocationRevision` and actor/timestamp metadata. `allocationRevision` is a coordination field updated transactionally during allocation approval and resource capacity/status edits.
+
+## 4.24 `resourceAllocations/{allocationId}` — Module 11
+
+Stores one resource request/allocation with organisation/workspace/resource IDs, quantity, requester and allocated user, purpose, start/end, optional linked event, status `requested | approved | rejected | checked_out | returned | cancelled`, optional decision/approval/checkout/return metadata and timestamps. Approved and checked-out allocations reserve quantity in overlapping windows; checked-out allocations remain unavailable until returned.
+
+## 4.25 `governancePolicies/{policyId}` — Module 12
+
+Stores policy metadata for one governance area: title/description, optional retention duration, disposition `retain | review | archive | delete_after_approval`, legal hold, review interval and next review time, owner, status `active | review_due | archived`, actor/timestamp metadata and schema version. It does not execute deletion or retention jobs.
+
+## 4.26 `governanceReviews/{reviewId}` — Module 12
+
+Append-only decision record containing organisation, policy ID/area, decision `retain | archive | legal_hold | escalate`, reason, optional record reference, actor and timestamp. No client or API update/delete path is provided.

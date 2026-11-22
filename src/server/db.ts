@@ -36,6 +36,13 @@ export const COL = {
   crmCampaignMembers: "crmCampaignMembers",
   crmActivities: "crmActivities",
   crmIdentityKeys: "crmIdentityKeys",
+  programmes: "programmes",
+  operationalEvents: "operationalEvents",
+  programmeSessions: "programmeSessions",
+  managedResources: "managedResources",
+  resourceAllocations: "resourceAllocations",
+  governancePolicies: "governancePolicies",
+  governanceReviews: "governanceReviews",
 } as const;
 
 export const SCHEMA_VERSION = 1;

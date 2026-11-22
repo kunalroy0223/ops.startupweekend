@@ -468,6 +468,171 @@ export interface NotificationDigest {
   updatedAt: string;
 }
 
+// ── Module 10: Event & Programme Management ────────────────────────────────
+
+export type ProgrammeStatus = "draft" | "active" | "completed" | "archived";
+export type ManagedEventStatus = "planning" | "confirmed" | "live" | "completed" | "cancelled" | "archived";
+export type ManagedEventType = "workshop" | "pitch_session" | "networking" | "community" | "outreach" | "programme" | "other";
+export type ProgrammeSessionStatus = "planned" | "live" | "completed" | "cancelled";
+
+export interface Programme {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  name: string;
+  programmeType: string;
+  description?: string | null;
+  ownerUserId: string;
+  workstreamId?: string | null;
+  teamId?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+  status: ProgrammeStatus;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  archivedAt?: string;
+  schemaVersion: number;
+}
+
+export interface ManagedEvent {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  programmeId?: string | null;
+  title: string;
+  eventType: ManagedEventType;
+  description?: string | null;
+  startAt: string;
+  endAt: string;
+  timeZone: string;
+  venue?: string | null;
+  meetingUrl?: string | null;
+  ownerUserId: string;
+  workstreamId?: string | null;
+  teamId?: string | null;
+  status: ManagedEventStatus;
+  operationsNotes?: string | null;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion: number;
+}
+
+export interface ProgrammeSession {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  programmeId: string;
+  eventId?: string | null;
+  title: string;
+  description?: string | null;
+  startAt: string;
+  endAt: string;
+  facilitator?: string | null;
+  location?: string | null;
+  status: ProgrammeSessionStatus;
+  sortOrder: number;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Module 11: Resource & Asset Management ──────────────────────────────────
+
+export type AssetLifecycle = "available" | "maintenance" | "retired" | "archived";
+export type ResourceAllocationStatus = "requested" | "approved" | "rejected" | "checked_out" | "returned" | "cancelled";
+
+export interface ManagedResource {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  kind: "asset" | "shared_resource";
+  name: string;
+  category: string;
+  description?: string | null;
+  inventoryCode?: string | null;
+  serialNumber?: string | null;
+  totalQuantity: number;
+  /** Incremented transactionally to serialize allocation-capacity decisions. */
+  allocationRevision?: number;
+  location?: string | null;
+  custodianUserId?: string | null;
+  condition: "new" | "good" | "fair" | "needs_repair";
+  status: AssetLifecycle;
+  workstreamId?: string | null;
+  teamId?: string | null;
+  notes?: string | null;
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion: number;
+}
+
+export interface ResourceAllocation {
+  id: string;
+  organizationId: string;
+  workspaceId: string;
+  resourceId: string;
+  quantity: number;
+  requestedByUserId: string;
+  allocatedToUserId: string;
+  purpose: string;
+  startAt: string;
+  endAt: string;
+  linkedEventId?: string | null;
+  status: ResourceAllocationStatus;
+  approvedByUserId?: string;
+  approvedAt?: string;
+  checkedOutAt?: string;
+  returnedAt?: string;
+  decisionNote?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ── Module 12: Administration, Audit & Governance ───────────────────────────
+
+export type GovernanceArea = "people" | "projects" | "reports" | "crm" | "events" | "resources" | "documents" | "audit" | "general";
+export type RetentionDisposition = "retain" | "review" | "archive" | "delete_after_approval";
+export type GovernanceReviewDecision = "retain" | "archive" | "legal_hold" | "escalate";
+
+export interface GovernancePolicy {
+  id: string;
+  organizationId: string;
+  area: GovernanceArea;
+  title: string;
+  description?: string | null;
+  retentionDays?: number | null;
+  disposition: RetentionDisposition;
+  legalHold: boolean;
+  reviewIntervalDays: number;
+  nextReviewAt?: string | null;
+  ownerUserId: string;
+  status: "active" | "review_due" | "archived";
+  createdBy: string;
+  updatedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  schemaVersion: number;
+}
+
+export interface GovernanceReview {
+  id: string;
+  organizationId: string;
+  policyId: string;
+  area: GovernanceArea;
+  decision: GovernanceReviewDecision;
+  reason: string;
+  recordReference?: string;
+  actorUserId: string;
+  createdAt: string;
+}
+
 // ── Module 9: CRM ─────────────────────────────────────────────────────────
 
 export type CrmAccountType = "company" | "startup" | "institution" | "investor" | "government" | "nonprofit" | "community" | "other";

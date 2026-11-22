@@ -2,7 +2,9 @@
 
 Internal work-management platform for the Inhub Entrepreneurship Cell. People, teams, workstreams, projects, tasks and daily reports, with role-based access for **Admin**, **Lead** and **Team Member**.
 
-**Status (2026-11-19):** foundation + Module 1 built and tested against the Firebase emulators. Not yet connected to a real Firebase project, Resend or Vercel, because no credentials were available. See [What still needs real credentials](#what-still-needs-real-credentials).
+**Delivery status (2026-11-22):** the source workspace contains the 12 numbered Inhub Ops modules. The coordinated Modules 9–12 implementation is included in this source bundle. Full release validation for this latest snapshot is still pending under Node 24.x with dependencies installed; no production Firebase deployment, index/rules deployment, Git push or Vercel deployment is included.
+
+**Canonical roadmap:** [12-module roadmap](docs/inhub-ops-12-module-roadmap.md) · [Modules 9–12 delivery notes](docs/modules-9-12-delivery.md). Preserve the module names and numbering in that roadmap.
 
 | | |
 |---|---|
@@ -22,14 +24,14 @@ Internal work-management platform for the Inhub Entrepreneurship Cell. People, t
 
 ## Quick start (local, no accounts needed)
 
-Requirements: Node 20.9+ and Java 11+ (for the Firebase emulators).
+Requirements: Node 24.x and Java 11+ (for the Firebase emulators).
 
 ```bash
-npm install
-cp .env.example .env.local
+npm ci
+touch .env.local
 ```
 
-Edit `.env.local` for emulator mode:
+The source bundle intentionally contains no local secrets or `.env.local`. Add the emulator values below to `.env.local`:
 
 ```env
 USE_FIREBASE_EMULATORS=true
@@ -56,13 +58,15 @@ Sign in as the Admin and follow the setup checklist on the overview: create a wo
 ## Checks
 
 ```bash
-npm run check        # typecheck + lint + 38 unit tests + production build
-npm run test:rules   # 12 Firestore security-rules tests on the emulator
+nvm use 24
+npm ci
+npm run check        # typecheck + lint + unit tests + production build
+npm run test:rules   # Firestore rules tests on an isolated emulator (port 8185)
 npm run build && npm start   # then, with emulators running and the Admin bootstrapped:
 npm run test:e2e     # 29 end-to-end checks in a real browser (screenshots in e2e-screenshots/)
 ```
 
-Latest run (2026-11-19): all of the above pass.
+Latest source inspection (2026-11-22): 248 TypeScript/TSX files parse without syntax diagnostics; domain authorization/lifecycle helper typechecks pass; the workspace JSON files parse. The full project typecheck, lint, unit suite, rules emulator suite, production build and preview smoke test remain outstanding for this latest snapshot. Do not treat an earlier run as sign-off for the current source bundle.
 
 ## Going live
 
@@ -101,4 +105,4 @@ preview           screenshots from the latest end-to-end run
 
 ## Missing inputs
 
-`prd.md`, `trd.md` and `.env.example` from the handoff pack were never supplied. They have been reconstructed (and marked as such). If you have the originals, add them and reconcile.
+`prd.md` and `trd.md` are included in this source bundle. The `.env.example` template is not included; create `.env.local` locally from the environment requirements and never commit secrets.

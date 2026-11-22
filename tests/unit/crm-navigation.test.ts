@@ -13,7 +13,7 @@ function actor(role: Actor["role"]): Actor {
   };
 }
 
-describe("CRM and Automation navigation", () => {
+describe("CRM and operational navigation", () => {
   it("shows CRM to all active roles", () => {
     for (const role of ["admin", "lead", "member"] as const) {
       expect(navFor(actor(role))).toContain("crm");
@@ -24,5 +24,18 @@ describe("CRM and Automation navigation", () => {
     expect(navFor(actor("admin"))).toContain("automation");
     expect(navFor(actor("lead"))).not.toContain("automation");
     expect(navFor(actor("member"))).not.toContain("automation");
+  });
+
+  it("shows Events and Resources to operational roles", () => {
+    for (const role of ["admin", "lead", "member"] as const) {
+      expect(navFor(actor(role))).toContain("events");
+      expect(navFor(actor(role))).toContain("resources");
+    }
+  });
+
+  it("shows Governance only to Admin", () => {
+    expect(navFor(actor("admin"))).toContain("governance");
+    expect(navFor(actor("lead"))).not.toContain("governance");
+    expect(navFor(actor("member"))).not.toContain("governance");
   });
 });

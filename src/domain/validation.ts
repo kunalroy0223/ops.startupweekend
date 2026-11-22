@@ -386,8 +386,8 @@ export const crmCampaignUpdateSchema = z.object({
   name: z.string().trim().min(2).max(160).optional(),
   objective: z.string().trim().min(2).max(2000).optional(),
   status: z.enum(["draft", "active", "paused", "completed", "archived"]).optional(),
-  startAt: z.string().datetime().nullable().optional(),
-  endAt: z.string().datetime().nullable().optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
   tags: crmTags.optional(),
 }).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
 
@@ -425,3 +425,168 @@ export const crmActivityCreateSchema = z.object({
     ctx.addIssue({ code: "custom", path: ["correctsActivityId"], message: "Choose the activity this entry corrects." });
   }
 });
+
+// ── Modules 10–12: programme operations, assets and governance ─────────────
+
+const optionalDateTime = z.string().datetime().optional();
+const dateRange = (value: { startAt?: string; endAt?: string }, ctx: z.RefinementCtx) => {
+  if (value.startAt && value.endAt && Date.parse(value.endAt) <= Date.parse(value.startAt)) {
+    ctx.addIssue({ code: "custom", path: ["endAt"], message: "End time must be after start time." });
+  }
+};
+
+export const programmeCreateSchema = z.object({
+  workspaceId: id,
+  name: z.string().trim().min(3).max(140),
+  programmeType: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(2000).optional(),
+  ownerUserId: id.optional(),
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  startAt: optionalDateTime,
+  endAt: optionalDateTime,
+}).strict().superRefine(dateRange);
+
+export const programmeUpdateSchema = z.object({
+  name: z.string().trim().min(3).max(140).optional(),
+  programmeType: z.string().trim().min(2).max(80).optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  startAt: z.string().datetime().nullable().optional(),
+  endAt: z.string().datetime().nullable().optional(),
+  status: z.enum(["draft", "active", "completed", "archived"]).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const operationalEventCreateSchema = z.object({
+  workspaceId: id,
+  programmeId: id.optional(),
+  title: z.string().trim().min(3).max(160),
+  eventType: z.enum(["workshop", "pitch_session", "networking", "community", "outreach", "programme", "other"]),
+  description: z.string().trim().max(2500).optional(),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  venue: z.string().trim().max(240).optional(),
+  meetingUrl: safeHttpUrl.optional(),
+  ownerUserId: id.optional(),
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  operationsNotes: z.string().trim().max(2500).optional(),
+}).strict().superRefine((value, ctx) => {
+  if (Date.parse(value.endAt) <= Date.parse(value.startAt)) ctx.addIssue({ code: "custom", path: ["endAt"], message: "End time must be after start time." });
+});
+
+export const operationalEventUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(160).optional(),
+  description: z.string().trim().max(2500).nullable().optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  venue: z.string().trim().max(240).nullable().optional(),
+  meetingUrl: safeHttpUrl.nullable().optional(),
+  operationsNotes: z.string().trim().max(2500).nullable().optional(),
+  status: z.enum(["planning", "confirmed", "live", "completed", "cancelled", "archived"]).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update").superRefine(dateRange);
+
+export const programmeSessionCreateSchema = z.object({
+  workspaceId: id,
+  programmeId: id,
+  eventId: id.optional(),
+  title: z.string().trim().min(3).max(160),
+  description: z.string().trim().max(1500).optional(),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  facilitator: z.string().trim().max(160).optional(),
+  location: z.string().trim().max(200).optional(),
+  sortOrder: z.number().int().min(0).max(10000).default(0),
+}).strict().superRefine((value, ctx) => {
+  if (Date.parse(value.endAt) <= Date.parse(value.startAt)) ctx.addIssue({ code: "custom", path: ["endAt"], message: "End time must be after start time." });
+});
+
+export const programmeSessionUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(160).optional(),
+  description: z.string().trim().max(1500).nullable().optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  facilitator: z.string().trim().max(160).nullable().optional(),
+  location: z.string().trim().max(200).nullable().optional(),
+  status: z.enum(["planned", "live", "completed", "cancelled"]).optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update").superRefine(dateRange);
+
+export const resourceCreateSchema = z.object({
+  workspaceId: id,
+  kind: z.enum(["asset", "shared_resource"]),
+  name: z.string().trim().min(2).max(140),
+  category: z.string().trim().min(2).max(80),
+  description: z.string().trim().max(1500).optional(),
+  inventoryCode: z.string().trim().max(80).optional(),
+  serialNumber: z.string().trim().max(120).optional(),
+  totalQuantity: z.number().int().min(1).max(10000),
+  location: z.string().trim().max(180).optional(),
+  custodianUserId: id.optional(),
+  condition: z.enum(["new", "good", "fair", "needs_repair"]).default("good"),
+  workstreamId: id.optional(),
+  teamId: id.optional(),
+  notes: z.string().trim().max(2000).optional(),
+}).strict();
+
+export const resourceUpdateSchema = z.object({
+  name: z.string().trim().min(2).max(140).optional(),
+  category: z.string().trim().min(2).max(80).optional(),
+  description: z.string().trim().max(1500).nullable().optional(),
+  inventoryCode: z.string().trim().max(80).nullable().optional(),
+  serialNumber: z.string().trim().max(120).nullable().optional(),
+  totalQuantity: z.number().int().min(1).max(10000).optional(),
+  location: z.string().trim().max(180).nullable().optional(),
+  custodianUserId: id.nullable().optional(),
+  condition: z.enum(["new", "good", "fair", "needs_repair"]).optional(),
+  status: z.enum(["available", "maintenance", "retired", "archived"]).optional(),
+  notes: z.string().trim().max(2000).nullable().optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const resourceAllocationCreateSchema = z.object({
+  workspaceId: id,
+  resourceId: id,
+  quantity: z.number().int().min(1).max(10000),
+  allocatedToUserId: id.optional(),
+  purpose: z.string().trim().min(3).max(500),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  linkedEventId: id.optional(),
+}).strict().superRefine((value, ctx) => {
+  if (Date.parse(value.endAt) <= Date.parse(value.startAt)) ctx.addIssue({ code: "custom", path: ["endAt"], message: "End time must be after start time." });
+});
+
+export const resourceAllocationUpdateSchema = z.object({
+  status: z.enum(["approved", "rejected", "checked_out", "returned", "cancelled"]),
+  decisionNote: z.string().trim().max(500).optional(),
+}).strict();
+
+export const governancePolicyCreateSchema = z.object({
+  area: z.enum(["people", "projects", "reports", "crm", "events", "resources", "documents", "audit", "general"]),
+  title: z.string().trim().min(3).max(140),
+  description: z.string().trim().max(1500).optional(),
+  retentionDays: z.number().int().min(1).max(36500).optional(),
+  disposition: z.enum(["retain", "review", "archive", "delete_after_approval"]),
+  legalHold: z.boolean().default(false),
+  reviewIntervalDays: z.number().int().min(30).max(3650).default(365),
+  nextReviewAt: z.string().datetime().optional(),
+  ownerUserId: id,
+}).strict();
+
+export const governancePolicyUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(140).optional(),
+  description: z.string().trim().max(1500).nullable().optional(),
+  retentionDays: z.number().int().min(1).max(36500).nullable().optional(),
+  disposition: z.enum(["retain", "review", "archive", "delete_after_approval"]).optional(),
+  legalHold: z.boolean().optional(),
+  reviewIntervalDays: z.number().int().min(30).max(3650).optional(),
+  nextReviewAt: z.string().datetime().nullable().optional(),
+  ownerUserId: id.optional(),
+  status: z.enum(["active", "review_due", "archived"]).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update");
+
+export const governanceReviewCreateSchema = z.object({
+  policyId: id,
+  decision: z.enum(["retain", "archive", "legal_hold", "escalate"]),
+  reason: z.string().trim().min(5).max(1200),
+  recordReference: z.string().trim().max(240).optional(),
+}).strict();

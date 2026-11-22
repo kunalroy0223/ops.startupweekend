@@ -12,7 +12,7 @@ let env: RulesTestEnvironment;
 
 beforeAll(async () => {
   const projectId = process.env.FIRESTORE_RULES_TEST_PROJECT_ID ?? "demo-inhub";
-  const port = Number(process.env.FIRESTORE_RULES_TEST_PORT ?? "8085");
+  const port = Number(process.env.FIRESTORE_RULES_TEST_PORT ?? "8185");
 
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error("Invalid FIRESTORE_RULES_TEST_PORT");
@@ -111,6 +111,20 @@ describe("Firestore Security Rules", () => {
     ]) {
       await assertFails(getDoc(doc(db, path)));
       await assertFails(setDoc(doc(db, path), { organizationId: "inhub" }));
+    }
+  });
+  it("Modules 10–12 remain server-authoritative for Admin, Lead and Member clients", async () => {
+    const paths = [
+      "programmes/p1", "operationalEvents/e1", "programmeSessions/s1",
+      "managedResources/r1", "resourceAllocations/a1",
+      "governancePolicies/gp1", "governanceReviews/gr1",
+    ];
+    for (const uid of ["admin", "lead", "mem"]) {
+      const db = as(uid);
+      for (const path of paths) {
+        await assertFails(getDoc(doc(db, path)));
+        await assertFails(setDoc(doc(db, path), { organizationId: "inhub" }));
+      }
     }
   });
   it("no client writes anywhere, even for Admin", async () => {
