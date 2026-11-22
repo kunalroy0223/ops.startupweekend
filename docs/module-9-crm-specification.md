@@ -1,10 +1,10 @@
 # Module 9 — Partnerships, Stakeholder & Outreach CRM
 
 **Specification:** v1.0
-**Status:** Proposed; no CRM data model or CRM screens are treated as implemented yet
+**Status:** CRM data model, services, APIs and UI are present in the current source archive; full release validation remains pending
 **Product module:** 9
 **Related module:** 4 — Notifications & Workflow Automation
-**Last reviewed:** 2026-11-21
+**Last reviewed:** 2026-11-22
 
 ## 1. Purpose
 
@@ -369,3 +369,10 @@ No `crmFollowUps` collection is proposed; follow-up tasks use `tasks` with CRM r
 - [ ] Which campaigns (if any) need event/programme links in Module 10.
 
 Until these decisions are approved, use the conservative permission model and manual prospect capture described above.
+
+
+## 13. Source implementation status (22 November 2026)
+
+The current Modules 9–11 source archive contains the following Module 9 surfaces and services: account and contact records, contact identity/duplicate handling, do-not-contact suppression, partnership opportunities, campaign records and campaign members, campaign-specific outreach stages, append-only outreach activities, activity corrections, task-linked follow-up actions, and campaign workflow configuration. The UI includes CRM overview, accounts, contacts, opportunities, campaigns, activities/outreach and workflow management. APIs and server services enforce organisation/workspace ownership, role/scope and do-not-contact rules.
+
+This source status is not a release sign-off. Run the Node 24 typecheck, lint, unit suite, production build and relevant API/emulator verification before marking Module 9 complete. Do not replace the existing CRM implementation while adding Modules 10–12.

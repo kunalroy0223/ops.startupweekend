@@ -1,4 +1,4 @@
-import { Bell, Boxes, Building2, CalendarDays, ChartColumn, FileText, FolderKanban, GitBranch, History, LayoutDashboard, ListChecks, Network, Settings, Target, Users, type LucideIcon } from "lucide-react";
+import { Bell, Boxes, Building2, CalendarDays, ChartColumn, FileText, FolderKanban, GitBranch, History, LayoutDashboard, ListChecks, Network, Settings, Target, Users, CalendarRange, Package, ShieldCheck, type LucideIcon } from "lucide-react";
 import type { NavKey } from "@/domain/authz";
 
 export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon; group: "work" | "organisation" | "you" }> = {
@@ -8,7 +8,10 @@ export const NAV: Record<NavKey, { href: string; label: string; icon: LucideIcon
   projects: { href: "/projects", label: "Projects", icon: FolderKanban, group: "work" },
   reports: { href: "/reports", label: "Work Reports", icon: FileText, group: "work" },
   calendar: { href: "/calendar", label: "Meetings & Calendar", icon: CalendarDays, group: "work" },
+  events: { href: "/events", label: "Events & Programmes", icon: CalendarRange, group: "work" },
   crm: { href: "/crm", label: "CRM", icon: Building2, group: "work" },
+  resources: { href: "/resources", label: "Resources & Assets", icon: Package, group: "organisation" },
+  governance: { href: "/governance", label: "Governance", icon: ShieldCheck, group: "organisation" },
   automation: { href: "/automation", label: "Automation", icon: GitBranch, group: "work" },
   analytics: { href: "/analytics", label: "Analytics", icon: ChartColumn, group: "work" },
   workspaces: { href: "/workspaces", label: "Workspaces", icon: Boxes, group: "organisation" },
@@ -27,6 +30,9 @@ export const CRUMB_LABEL: Record<string, string> = {
   structure: "Workstreams & Teams",
   projects: "Projects",
   calendar: "Calendar",
+  events: "Events & Programmes",
+  resources: "Resources & Assets",
+  governance: "Administration, Audit & Governance",
   tasks: "Tasks",
   crm: "CRM",
   automation: "Automation",
