@@ -1001,7 +1001,7 @@ This appendix describes the current application implementation. It supersedes th
 
 `projects/{projectId}` stores `organizationId`, `workspaceId`, optional `teamId` and `workstreamId`, `name`, unique workspace-scoped `slug`, optional `description`, `status` (`active` or `archived`), `createdBy`, `createdAt`, `updatedAt` and optional `archivedAt`.
 
-`tasks/{taskId}` stores `organizationId`, `workspaceId`, optional `projectId`, `teamId` and `workstreamId`, `title`, optional `description` and `acceptanceCriteria`, required `accountableUserId`, bounded `collaboratorUserIds`, `status`, `priority`, optional `dueAt`, optional `parentTaskId`, bounded `dependencyIds`, optional `referenceLinks`, `createdBy`, `updatedBy`, `createdAt`, `updatedAt`, optional `completedAt` and optional `archivedAt`.
+`tasks/{taskId}` stores `organizationId`, `workspaceId`, optional `projectId`, `teamId` and `workstreamId`, `title`, optional `description` and `acceptanceCriteria`, required `accountableUserId`, bounded `collaboratorUserIds`, `status`, `priority`, optional `startAt`, optional `dueAt`, optional `parentTaskId`, bounded `dependencyIds`, optional `referenceLinks`, `createdBy`, `updatedBy`, `createdAt`, `updatedAt`, optional `completedAt` and optional `archivedAt`.
 
 The project’s team/workstream context is inherited by a new task when omitted. If a task explicitly supplies context, it must match the project context. If both team and workstream are set, their `workstreamTeams` relationship must be active. The accountable owner must be active; for non-Admin assignment, they must be an active member of each selected team/workstream.
 
@@ -1035,3 +1035,33 @@ The detailed proposed requirements are in:
 - `docs/module-9-crm-specification.md`
 
 The additions in sections 4.22–4.32 are **proposed schema only**. They are not implemented collections, deployed indexes or Firestore Rules. Before implementation, update `src/domain/types.ts`, `src/server/db.ts`, validation schemas, `firestore.rules`, `firestore.indexes.json` and emulator tests together. Deploy indexes/rules only after review and a migration/backfill plan where needed.
+
+
+## Module 8 — Meeting
+
+`meetings/{meetingId}` stores organisation calendar events.
+
+```ts
+type MeetingStatus = "scheduled" | "cancelled" | "completed";
+type MeetingResponse = "accepted" | "tentative" | "declined";
+interface Meeting {
+  id: string;
+  organizationId: string;
+  title: string;
+  description?: string;
+  startAt: string; // ISO instant
+  endAt: string; // ISO instant
+  timeZone: string; // organisation IANA timezone used for display/input
+  location?: string;
+  meetingUrl?: string;
+  organizerUserId: string;
+  attendeeUserIds: string[]; // includes the organiser
+  responses: Record<string, MeetingResponse>;
+  status: MeetingStatus;
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt?: string;
+}
+```
+
+Server-side meeting mutations write audit records and outbox events atomically. The browser does not write meeting documents directly. The application currently supports a maximum of 30 attendees per meeting and a maximum duration of 12 hours.

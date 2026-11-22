@@ -217,6 +217,29 @@ export interface EmailDelivery {
 }
 
 
+export const MEETING_STATUSES = ["scheduled", "cancelled", "completed"] as const;
+export type MeetingStatus = (typeof MEETING_STATUSES)[number];
+export type MeetingResponse = "accepted" | "tentative" | "declined";
+
+export interface Meeting {
+  id: string;
+  organizationId: string;
+  title: string;
+  description?: string;
+  startAt: string;
+  endAt: string;
+  timeZone: string;
+  location?: string;
+  meetingUrl?: string;
+  organizerUserId: string;
+  attendeeUserIds: string[];
+  responses: Record<string, MeetingResponse>;
+  status: MeetingStatus;
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt?: string;
+}
+
 export const TASK_STATUSES = ["backlog", "assigned", "in_progress", "in_review", "completed", "blocked", "cancelled"] as const;
 export type TaskStatus = (typeof TASK_STATUSES)[number];
 export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
@@ -252,6 +275,7 @@ export interface Task {
   collaboratorUserIds: string[];
   status: TaskStatus;
   priority: TaskPriority;
+  startAt?: string;
   dueAt?: string;
   parentTaskId?: string;
   dependencyIds: string[];

@@ -1,11 +1,12 @@
 import "server-only";
-import { FieldPath, type Query } from "firebase-admin/firestore";
+import { FieldPath, type Query, type QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { canViewAuditEntry, canViewTeam, canViewUser, canViewWorkspace, canViewWorkstream, isAdmin, type Actor, type Scope } from "@/domain/authz";
 import type { AppNotification, AuditLog, EmailDelivery, Invitation, MembershipType, Organization, Role, UserProfile, UserStatus, Workspace, Workstream, Team } from "@/domain/types";
 import { COL, col, fromDoc, now, tsFromMs } from "./db";
 import { adminDb } from "./firebase-admin";
 import { serverEnv } from "./env";
 import { getScope } from "./scope";
+import { buildMemberManagementSnapshot } from "@/domain/member-management";
 
 const PAGE = 25;
 const org = () => serverEnv().ORGANIZATION_ID;
@@ -164,6 +165,33 @@ export async function getUserDetail(actor: Actor, uid: string): Promise<UserDeta
     : active.filter((m) => (m.scopeKind === "team" ? canViewTeam(actor, scope, m.scopeId) : canViewWorkstream(actor, scope, m.scopeId)));
   const activity = isAdmin(actor) || actor.uid === uid ? (await listAudit(actor, { subjectUserId: uid })).rows : [];
   return { user: toPublic(user), memberships, activity };
+}
+
+
+export async function getMemberManagementSnapshot(actor: Actor) {
+  if (!isAdmin(actor)) return null;
+  const [usersSnap, teamMembershipsSnap, workstreamMembershipsSnap, teamsSnap, workstreamsSnap] = await Promise.all([
+    col("users").where("organizationId", "==", org()).get(),
+    col("teamMemberships").where("organizationId", "==", org()).get(),
+    col("workstreamMemberships").where("organizationId", "==", org()).get(),
+    col("teams").where("organizationId", "==", org()).where("status", "==", "active").get(),
+    col("workstreams").where("organizationId", "==", org()).where("status", "==", "active").get(),
+  ]);
+  const users = usersSnap.docs.map((doc) => ({ uid: doc.id, role: doc.data().role as Role, status: doc.data().status as UserStatus }));
+  const memberships = (docs: QueryDocumentSnapshot[], scopeField: "teamId" | "workstreamId") => docs.map((doc) => ({
+    userId: String(doc.data().userId ?? ""),
+    scopeId: String(doc.data()[scopeField] ?? ""),
+    status: (doc.data().status === "active" ? "active" : "inactive") as "active" | "inactive",
+  }));
+  return buildMemberManagementSnapshot({
+    users,
+    teamMemberships: memberships(teamMembershipsSnap.docs, "teamId"),
+    workstreamMemberships: memberships(workstreamMembershipsSnap.docs, "workstreamId"),
+    activeTeams: teamsSnap.size,
+    activeWorkstreams: workstreamsSnap.size,
+    activeTeamIds: teamsSnap.docs.map((doc) => doc.id),
+    activeWorkstreamIds: workstreamsSnap.docs.map((doc) => doc.id),
+  });
 }
 
 // ── Invitations ─────────────────────────────────────────────────────────

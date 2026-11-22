@@ -32,6 +32,7 @@ export function TaskDetailWorkspace({ currentUserId, task, comments, activity, p
   const [priority, setPriority] = useState<TaskPriority>(task.priority);
   const [owner, setOwner] = useState(task.accountableUserId);
   const [collaborators, setCollaborators] = useState(task.collaboratorUserIds ?? []);
+  const [startAt, setStartAt] = useState(dateTimeInputInTimeZone(task.startAt, timeZone));
   const [dueAt, setDueAt] = useState(dateTimeInputInTimeZone(task.dueAt, timeZone));
   const [teamId, setTeamId] = useState(task.teamId ?? "");
   const [workstreamId, setWorkstreamId] = useState(task.workstreamId ?? "");
@@ -61,14 +62,16 @@ export function TaskDetailWorkspace({ currentUserId, task, comments, activity, p
 
   async function saveTask(e: React.FormEvent) {
     e.preventDefault(); setError("");
+    const startAtIso = startAt ? dateTimeToIso(startAt, timeZone) : null;
     const dueAtIso = dueAt ? dateTimeToIso(dueAt, timeZone) : null;
+    if (startAt && !startAtIso) { setError("That planned start is not valid in the organisation timezone. Choose another time."); return; }
     if (dueAt && !dueAtIso) { setError("That date and time is not valid in the organisation timezone. Choose another time."); return; }
     setBusy(true);
     try {
       await api(`/api/tasks/${task.id}`, { method: "PATCH", body: {
         title, description, acceptanceCriteria: criteria,
         priority, accountableUserId: owner, collaboratorUserIds: collaborators,
-        dueAt: dueAtIso,
+        startAt: startAtIso, dueAt: dueAtIso,
         teamId: teamId || null, workstreamId: workstreamId || null, projectId: projectId || null,
         parentTaskId: parentTaskId || null, dependencyIds,
         referenceLinks: referenceLinks.split("\n").map(v => v.trim()).filter(Boolean),
@@ -129,6 +132,7 @@ export function TaskDetailWorkspace({ currentUserId, task, comments, activity, p
             <label className="grid gap-1.5 text-[13px] font-semibold md:col-span-2">Title<Input required minLength={3} maxLength={160} value={title} onChange={e=>setTitle(e.target.value)} /></label>
             <label className="grid gap-1.5 text-[13px] font-semibold">Accountable owner<Select value={owner} onChange={e=>setOwner(e.target.value)}>{people.filter(p=>p.status==="active").map(p=><option key={p.uid} value={p.uid}>{p.displayName}</option>)}</Select></label>
             <label className="grid gap-1.5 text-[13px] font-semibold">Priority<Select value={priority} onChange={e=>setPriority(e.target.value as TaskPriority)}>{priorities.map(p=><option key={p} value={p}>{label(p)}</option>)}</Select></label>
+            <label className="grid gap-1.5 text-[13px] font-semibold">Planned start ({timeZone})<Input type="datetime-local" value={startAt} onChange={e=>setStartAt(e.target.value)} /></label>
             <label className="grid gap-1.5 text-[13px] font-semibold">Due date & time ({timeZone})<Input type="datetime-local" value={dueAt} onChange={e=>setDueAt(e.target.value)} /></label>
             <label className="grid gap-1.5 text-[13px] font-semibold">Team association<Select value={teamId} onChange={e=>setTeamId(e.target.value)}><option value="">No team</option>{teams.filter(t=>t.workspaceId===task.workspaceId).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</Select></label>
             <label className="grid gap-1.5 text-[13px] font-semibold">Workstream association<Select value={workstreamId} onChange={e=>setWorkstreamId(e.target.value)}><option value="">No workstream</option>{workstreams.filter(w=>w.workspaceId===task.workspaceId).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</Select></label>
@@ -151,7 +155,7 @@ export function TaskDetailWorkspace({ currentUserId, task, comments, activity, p
                 <div className="sm:col-span-2"><p className="text-xs text-fg-3">Depends on</p>{task.dependencyIds?.length ? <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">{task.dependencyIds.map(id=><Link key={id} href={`/tasks/${id}`} className="text-sm font-semibold text-accent-text hover:underline">{availableTasks.find(t=>t.id===id)?.title ?? "Open dependency"}</Link>)}</div> : <p className="text-sm">No dependencies</p>}</div>
               </div>
             </div>
-            <div className="grid gap-3 text-sm sm:grid-cols-2"><div><p className="text-xs text-fg-3">Accountable owner</p><p className="font-semibold">{ownerName}</p></div><div><p className="text-xs text-fg-3">Collaborators</p><p>{task.collaboratorUserIds.map(id=>people.find(p=>p.uid===id)?.displayName??"Teammate").join(", ") || "None"}</p></div><div><p className="text-xs text-fg-3">Due date</p><p>{task.dueAt ? formatDateTimeInTimeZone(task.dueAt, timeZone) : "No due date"}</p></div><div><p className="text-xs text-fg-3">Created</p><p>{formatDateTimeInTimeZone(task.createdAt, timeZone)}</p></div><div><p className="text-xs text-fg-3">Team</p><p>{teams.find(t=>t.id===task.teamId)?.name ?? (task.teamId ? "Associated team" : "No team association")}</p></div><div><p className="text-xs text-fg-3">Workstream</p><p>{workstreams.find(w=>w.id===task.workstreamId)?.name ?? (task.workstreamId ? "Associated workstream" : "No workstream association")}</p></div><div><p className="text-xs text-fg-3">Project</p><p>{projects.find(p=>p.id===task.projectId)?.name ?? (task.projectId ? "Project" : "No project")}</p></div></div>
+            <div className="grid gap-3 text-sm sm:grid-cols-2"><div><p className="text-xs text-fg-3">Accountable owner</p><p className="font-semibold">{ownerName}</p></div><div><p className="text-xs text-fg-3">Collaborators</p><p>{task.collaboratorUserIds.map(id=>people.find(p=>p.uid===id)?.displayName??"Teammate").join(", ") || "None"}</p></div><div><p className="text-xs text-fg-3">Planned start</p><p>{task.startAt ? formatDateTimeInTimeZone(task.startAt, timeZone) : "Not scheduled"}</p></div><div><p className="text-xs text-fg-3">Due date</p><p>{task.dueAt ? formatDateTimeInTimeZone(task.dueAt, timeZone) : "No due date"}</p></div><div><p className="text-xs text-fg-3">Created</p><p>{formatDateTimeInTimeZone(task.createdAt, timeZone)}</p></div><div><p className="text-xs text-fg-3">Team</p><p>{teams.find(t=>t.id===task.teamId)?.name ?? (task.teamId ? "Associated team" : "No team association")}</p></div><div><p className="text-xs text-fg-3">Workstream</p><p>{workstreams.find(w=>w.id===task.workstreamId)?.name ?? (task.workstreamId ? "Associated workstream" : "No workstream association")}</p></div><div><p className="text-xs text-fg-3">Project</p><p>{projects.find(p=>p.id===task.projectId)?.name ?? (task.projectId ? "Project" : "No project")}</p></div></div>
             {task.referenceLinks?.length ? <div><p className="mb-2 text-xs font-bold uppercase tracking-wide text-fg-3">Documents & reference links</p><div className="flex flex-wrap gap-3">{task.referenceLinks.map(url=><a key={url} href={url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-semibold text-accent-text hover:underline"><ExternalLink className="size-3.5" />{new URL(url).hostname}</a>)}</div></div> : null}
           </div>}
         </Panel>

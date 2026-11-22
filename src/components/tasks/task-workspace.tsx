@@ -48,7 +48,7 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
   const [form, setForm] = useState({
     title: "", workspaceId: workspaces[0]?.id ?? "", projectId: "", teamId: "", workstreamId: "",
     accountableUserId: people[0]?.uid ?? "", priority: "medium" as TaskPriority,
-    dueAt: "", description: "", acceptanceCriteria: "",
+    startAt: "", dueAt: "", description: "", acceptanceCriteria: "",
   });
   const filtered = useMemo(() => tasks.filter(t =>
     (statusFilter === "all" || t.status === statusFilter) &&
@@ -59,7 +59,9 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
 
   async function createTask(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setError("");
+    const startAt = form.startAt ? dateTimeToIso(form.startAt, timeZone) : undefined;
     const dueAt = form.dueAt ? dateTimeToIso(form.dueAt, timeZone) : undefined;
+    if (form.startAt && !startAt) { setError("That planned start is not valid in the organisation timezone. Choose another time."); return; }
     if (form.dueAt && !dueAt) { setError("That date and time is not valid in the organisation timezone. Choose another time."); return; }
     setBusy(true);
     try {
@@ -68,10 +70,10 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
         teamId: form.teamId || undefined, workstreamId: form.workstreamId || undefined, title: form.title, description: form.description || undefined,
         acceptanceCriteria: form.acceptanceCriteria || undefined, accountableUserId: form.accountableUserId,
         collaboratorUserIds: [], priority: form.priority,
-        dueAt,
+        startAt, dueAt,
         dependencyIds: [],
       }});
-      setShowCreate(false); setForm(v => ({ ...v, title: "", description: "", acceptanceCriteria: "", dueAt: "" }));
+      setShowCreate(false); setForm(v => ({ ...v, title: "", description: "", acceptanceCriteria: "", startAt: "", dueAt: "" }));
       router.refresh();
       const data = await api<{ tasks: Task[] }>("/api/tasks"); setTasks(data.tasks);
     } catch (err) { setError(err instanceof ApiClientError ? err.message : "Unable to create task."); }
@@ -132,6 +134,7 @@ export function TaskWorkspace({ initialTasks, projects, workspaces, teams, works
         <Labeled label="Team association (optional)"><Select value={form.teamId} onChange={e => setForm(v => ({...v,teamId:e.target.value}))}><option value="">No team</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</Select></Labeled>
         <Labeled label="Workstream association (optional)"><Select value={form.workstreamId} onChange={e => setForm(v => ({...v,workstreamId:e.target.value}))}><option value="">No workstream</option>{workstreams.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</Select></Labeled>
         <Labeled label="Priority"><Select value={form.priority} onChange={e => setForm(v => ({...v,priority:e.target.value as TaskPriority}))}>{priorities.map(p => <option key={p} value={p}>{label(p)}</option>)}</Select></Labeled>
+        <Labeled label={`Planned start (${timeZone})`}><Input type="datetime-local" value={form.startAt} onChange={e => setForm(v => ({...v,startAt:e.target.value}))} /></Labeled>
         <Labeled label={`Due date & time (${timeZone})`}><Input type="datetime-local" value={form.dueAt} onChange={e => setForm(v => ({...v,dueAt:e.target.value}))} /></Labeled>
         <Labeled label="Description" className="md:col-span-2"><Textarea rows={3} value={form.description} onChange={e => setForm(v => ({...v,description:e.target.value}))} placeholder="Add context, scope or instructions." /></Labeled>
         <Labeled label="Acceptance criteria" className="md:col-span-2"><Textarea rows={2} value={form.acceptanceCriteria} onChange={e => setForm(v => ({...v,acceptanceCriteria:e.target.value}))} placeholder="What does done look like?" /></Labeled>

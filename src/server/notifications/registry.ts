@@ -429,6 +429,55 @@ const handlers: Record<EventType, EventHandler> = {
   TASK_OVERDUE: taskReminderHandler("overdue"),
   CRM_FOLLOW_UP_DUE: crmReminderHandler("follow_up"),
   CRM_REPLY_WAITING: crmReminderHandler("reply_waiting"),
+  MEETING_INVITED: {
+    async resolve(event) {
+      const meetingId = String(event.payload.meetingId ?? event.resourceId);
+      const title = String(event.payload.title ?? "A meeting");
+      const action = String(event.payload.action ?? "scheduled");
+      const startAt = String(event.payload.startAt ?? "");
+      const endAt = String(event.payload.endAt ?? "");
+      const timeZone = String(event.payload.timeZone ?? "Asia/Kolkata");
+      const attendeeIds = Array.isArray(event.payload.attendeeUserIds) ? event.payload.attendeeUserIds.filter((uid): uid is string => typeof uid === "string") : [];
+      const users = await Promise.all([...new Set(attendeeIds)].filter((uid) => uid !== event.actorUserId).map((uid) => getUser(uid)));
+      const when = startAt && Number.isFinite(Date.parse(startAt)) ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(startAt)) : "the scheduled time";
+      const line = action === "cancelled" ? `${title} was cancelled.` : action === "updated" ? `${title} was updated for ${when}.` : `${title} is scheduled for ${when}.`;
+      return users.filter((user): user is UserProfile => !!user && user.status === "active").map((user) => ({
+        key: user.uid, uid: user.uid, email: user.email,
+        inApp: { title: action === "cancelled" ? "Meeting cancelled" : action === "updated" ? "Meeting updated" : "You're invited to a meeting", body: line, actionUrl: `/calendar?meetingId=${encodeURIComponent(meetingId)}`, resourceType: "meeting", resourceId: meetingId },
+        compose: async () => ({
+          templateId: "meeting_invitation", subject: action === "cancelled" ? `Cancelled: ${title}` : `Meeting ${action}: ${title}`, preview: line, eyebrow: "Inhub calendar",
+          heading: action === "cancelled" ? "A meeting was cancelled." : action === "updated" ? "A meeting was updated." : "You're invited to a meeting.",
+          paragraphs: [line, endAt && Number.isFinite(Date.parse(endAt)) ? `Expected end: ${new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(endAt))}.` : "", "Open Inhub Workspace to view the calendar and respond to the invitation."].filter(Boolean),
+          cta: { label: "Open calendar", href: appUrl(`/calendar?meetingId=${encodeURIComponent(meetingId)}`) },
+        }),
+      }));
+    },
+  },
+  MEETING_RESPONSE_UPDATED: {
+    async resolve(event) {
+      const organizerUserId = String(event.payload.organizerUserId ?? "");
+      const attendeeUserId = String(event.payload.attendeeUserId ?? event.actorUserId ?? "");
+      const response = String(event.payload.response ?? "responded");
+      const title = String(event.payload.title ?? "A meeting");
+      const meetingId = String(event.payload.meetingId ?? event.resourceId);
+      const startAt = String(event.payload.startAt ?? "");
+      const timeZone = String(event.payload.timeZone ?? "Asia/Kolkata");
+      if (!organizerUserId || organizerUserId === attendeeUserId) return [];
+      const [organizer, attendee] = await Promise.all([getUser(organizerUserId), getUser(attendeeUserId)]);
+      if (!organizer || organizer.status !== "active") return [];
+      const when = startAt && Number.isFinite(Date.parse(startAt)) ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short", timeZone }).format(new Date(startAt)) : "the scheduled time";
+      const line = `${attendee?.displayName ?? "An attendee"} responded ${response} to ${title} (${when}).`;
+      return [{
+        key: organizer.uid, uid: organizer.uid, email: organizer.email,
+        inApp: { title: "Meeting response received", body: line, actionUrl: `/calendar?meetingId=${encodeURIComponent(meetingId)}`, resourceType: "meeting", resourceId: meetingId },
+        compose: async () => ({
+          templateId: "meeting_response", subject: `Meeting response: ${title}`, preview: line, eyebrow: "Inhub calendar",
+          heading: "An attendee responded to your meeting.", paragraphs: [line, "Open Inhub Workspace to review the attendee list and meeting details."],
+          cta: { label: "Open calendar", href: appUrl(`/calendar?meetingId=${encodeURIComponent(meetingId)}`) },
+        }),
+      }];
+    },
+  },
 };
 
 

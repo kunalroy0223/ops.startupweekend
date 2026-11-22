@@ -108,7 +108,7 @@ function AutomationRuleCard({ rule }: { rule: AutomationRuleView }) {
   }
 
   return (
-    <Panel className="grid gap-4">
+    <Panel className="grid min-w-0 gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -118,14 +118,14 @@ function AutomationRuleCard({ rule }: { rule: AutomationRuleView }) {
           <p className="mt-1 max-w-2xl text-[13px] text-fg-2">{rule.description}</p>
           {!rule.executionAvailable && <p className="mt-2 flex items-start gap-1.5 text-xs text-warning"><AlertTriangle className="mt-0.5 size-3.5 shrink-0" />{rule.unavailableReason ?? "This rule is not available yet."}</p>}
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 text-xs text-fg-3"><Clock3 className="size-3.5" />Scheduled rule</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+          <span className="inline-flex items-center gap-1.5 text-xs text-fg-3"><Clock3 className="size-3.5 shrink-0" />Scheduled rule</span>
           <Button size="sm" variant={enabled ? "danger" : "secondary"} loading={toggling} disabled={!rule.executionAvailable} onClick={toggleRule}>{enabled ? "Pause" : "Enable"}</Button>
         </div>
       </div>
-      <form onSubmit={onSubmit} className="grid gap-3 border-t border-line pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+      <form onSubmit={onSubmit} className="grid min-w-0 gap-3 border-t border-line pt-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
         <Field label={configField.label} hint={`${configField.hint} Current unit: ${configField.unit}.`}>{(props) => <Input {...props} type="number" inputMode="numeric" min={configField.min} max={configField.max} step={1} value={draft} onChange={(event) => setDraft(event.target.value)} />}</Field>
-        <Button type="submit" variant="secondary" loading={saving} disabled={!dirty || !Number.isInteger(Number(draft))}><Save className="size-4" />Save configuration</Button>
+        <Button className="w-full justify-center sm:w-auto" type="submit" variant="secondary" loading={saving} disabled={!dirty || !Number.isInteger(Number(draft))}><Save className="size-4" />Save configuration</Button>
       </form>
       <p className="text-[11px] text-fg-3">Last updated: {rule.updatedAt ? new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeStyle: "short" }).format(new Date(rule.updatedAt)) : "Default configuration"}</p>
     </Panel>
@@ -147,7 +147,7 @@ function RunHistory({ runs, onRetry }: { runs: AutomationRunView[]; onRetry: (id
     }
   }
   return (
-    <Panel>
+    <Panel className="min-w-0">
       <SectionHeading title="Execution history" count={runs.length} icon={<Activity />} />
       {!runs.length ? <p className="text-sm text-fg-2">No automation runs yet. Enable a supported rule and run the evaluator to begin recording executions.</p> : (
         <div className="overflow-x-auto">
@@ -192,7 +192,7 @@ function DigestHistory({ digests }: { digests: DigestView[] }) {
   }
 
   return (
-    <Panel>
+    <Panel className="min-w-0">
       <SectionHeading title="Daily digest delivery" count={digests.length} icon={<Activity />} />
       {!digests.length ? <p className="text-sm text-fg-2">No daily digests have been queued yet. Digests are created for active users who choose Daily digest in notification preferences.</p> : (
         <div className="overflow-x-auto">
@@ -237,7 +237,7 @@ function EmailDeliveryHistory({ deliveries }: { deliveries: EmailDeliveryView[] 
   }
 
   return (
-    <Panel>
+    <Panel className="min-w-0">
       <SectionHeading title="Email delivery history" count={deliveries.length} icon={<Activity />} />
       {!deliveries.length ? <p className="text-sm text-fg-2">No email deliveries have been recorded yet.</p> : (
         <div className="overflow-x-auto">
@@ -282,7 +282,7 @@ function FailedEventHistory({ events }: { events: FailedEventView[] }) {
   }
 
   return (
-    <Panel>
+    <Panel className="min-w-0">
       <SectionHeading title="Failed notification events" count={events.length} icon={<AlertTriangle />} />
       {!events.length ? <p className="text-sm text-fg-2">No failed notification events. Events that exhaust automatic retries appear here for Admin review.</p> : (
         <div className="overflow-x-auto">
@@ -332,7 +332,7 @@ export function AutomationWorkspace({ rules, runs, digests, deliveries, failedEv
 
   const activeCount = rules.filter((rule) => rule.enabled && rule.executionAvailable).length;
   return (
-    <div className="grid gap-6">
+    <div className="grid min-w-0 w-full max-w-full gap-6">
       <PageHeader eyebrow="WORKFLOW OPERATIONS" title="Automation" description="Configure and monitor the organisation's scheduled workflow rules. Rule execution is scoped to supported task and notification workflows." icon={<GitBranch />} meta={<span className="inline-flex items-center gap-1.5 text-xs text-fg-2"><ShieldCheck className="size-3.5" />Admin-managed controls</span>} actions={<Button variant="primary" loading={processing} onClick={processNow}><PlayCircle className="size-4" />Run evaluator now</Button>} />
       <Panel className="border-warning/40 bg-warning/5"><div className="flex items-start gap-3"><PauseCircle className="mt-0.5 size-5 shrink-0 text-warning" /><div><h2 className="text-sm font-bold">Scheduled processing</h2><p className="mt-1 text-[13px] text-fg-2">The production scheduler runs daily. Use a 24-hour lead time for dependable due-soon reminders. Run evaluator now processes due rules and pending notification work immediately, which may send messages.</p><p className="mt-1 text-xs text-fg-3">{activeCount} supported rule{activeCount === 1 ? "" : "s"} enabled.</p></div></div></Panel>
       <div className="flex items-center justify-between gap-3"><SectionHeading title="Built-in rules" count={rules.length} /><span className="text-xs text-fg-3">Enable only supported rules</span></div>

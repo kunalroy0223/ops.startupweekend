@@ -117,6 +117,37 @@ const safeHttpUrl = z.string().url().max(2048).refine((value) => {
 }, "Use an HTTP or HTTPS URL");
 
 const taskId = id;
+export const meetingCreateSchema = z.object({
+  title: z.string().trim().min(3, "Use at least 3 characters").max(140),
+  description: z.string().trim().max(1500).optional(),
+  startAt: z.string().datetime(),
+  endAt: z.string().datetime(),
+  location: z.string().trim().max(180).optional(),
+  meetingUrl: safeHttpUrl.optional(),
+  attendeeUserIds: z.array(id).max(29).default([]),
+}).strict().superRefine((value, ctx) => {
+  const start = Date.parse(value.startAt);
+  const end = Date.parse(value.endAt);
+  if (end <= start) ctx.addIssue({ code: "custom", path: ["endAt"], message: "The end time must be after the start time." });
+  if (end - start > 12 * 60 * 60_000) ctx.addIssue({ code: "custom", path: ["endAt"], message: "Meetings cannot be longer than 12 hours." });
+  if (!value.location && !value.meetingUrl) ctx.addIssue({ code: "custom", path: ["location"], message: "Add a location or meeting link." });
+});
+
+export const meetingUpdateSchema = z.object({
+  title: z.string().trim().min(3).max(140).optional(),
+  description: z.string().trim().max(1500).optional(),
+  startAt: z.string().datetime().optional(),
+  endAt: z.string().datetime().optional(),
+  location: z.string().trim().max(180).optional(),
+  meetingUrl: safeHttpUrl.optional(),
+  attendeeUserIds: z.array(id).max(29).optional(),
+}).strict().refine((value) => Object.keys(value).length > 0, "Provide at least one field to update").superRefine((value, ctx) => {
+  if (value.startAt && value.endAt && Date.parse(value.endAt) <= Date.parse(value.startAt)) ctx.addIssue({ code: "custom", path: ["endAt"], message: "The end time must be after the start time." });
+  if (value.startAt && value.endAt && Date.parse(value.endAt) - Date.parse(value.startAt) > 12 * 60 * 60_000) ctx.addIssue({ code: "custom", path: ["endAt"], message: "Meetings cannot be longer than 12 hours." });
+});
+
+export const meetingResponseSchema = z.object({ response: z.enum(["accepted", "tentative", "declined"]) }).strict();
+
 export const projectCreateSchema = z.object({
   workspaceId: id,
   workstreamId: id.optional(),
@@ -137,10 +168,15 @@ export const taskCreateSchema = z.object({
   accountableUserId: id,
   collaboratorUserIds: z.array(id).max(20).default([]),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
+  startAt: z.string().datetime().optional(),
   dueAt: z.string().datetime().optional(),
   parentTaskId: taskId.optional(),
   dependencyIds: z.array(id).max(20).default([]),
   referenceLinks: z.array(safeHttpUrl).max(20).default([]),
+}).superRefine((value, ctx) => {
+  if (value.startAt && value.dueAt && Date.parse(value.startAt) > Date.parse(value.dueAt)) {
+    ctx.addIssue({ code: "custom", path: ["dueAt"], message: "The due date must be on or after the planned start." });
+  }
 });
 export const taskUpdateSchema = z.object({
   title: z.string().trim().min(3).max(160).optional(),
@@ -152,11 +188,14 @@ export const taskUpdateSchema = z.object({
   workstreamId: id.nullable().optional(),
   projectId: id.nullable().optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
+  startAt: z.string().datetime().nullable().optional(),
   dueAt: z.string().datetime().nullable().optional(),
   parentTaskId: id.nullable().optional(),
   dependencyIds: z.array(id).max(20).optional(),
   referenceLinks: z.array(safeHttpUrl).max(20).optional(),
-}).strict();
+}).strict().refine((value) => !value.startAt || !value.dueAt || Date.parse(value.startAt) <= Date.parse(value.dueAt), {
+  message: "The due date must be on or after the planned start.", path: ["dueAt"],
+});
 export const taskStatusSchema = z.object({
   status: z.enum(["backlog", "assigned", "in_progress", "in_review", "completed", "blocked", "cancelled"]),
   reason: z.string().trim().max(500).optional(),

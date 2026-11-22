@@ -24,6 +24,13 @@ describe("Module 2 validation", () => {
     expect(taskCreateSchema.safeParse({ ...task, collaboratorUserIds: Array.from({ length: 21 }, (_, i) => `u${i}`) }).success).toBe(false);
   });
 
+  it("validates planned task dates and their ordering", () => {
+    expect(taskCreateSchema.safeParse({ ...task, startAt: "2026-11-20T09:00:00.000Z", dueAt: "2026-11-21T09:00:00.000Z" }).success).toBe(true);
+    expect(taskCreateSchema.safeParse({ ...task, startAt: "2026-11-22T09:00:00.000Z", dueAt: "2026-11-21T09:00:00.000Z" }).success).toBe(false);
+    expect(taskUpdateSchema.safeParse({ startAt: "2026-11-20T09:00:00.000Z", dueAt: "2026-11-21T09:00:00.000Z" }).success).toBe(true);
+    expect(taskUpdateSchema.safeParse({ startAt: "2026-11-22T09:00:00.000Z", dueAt: "2026-11-21T09:00:00.000Z" }).success).toBe(false);
+  });
+
   it("validates project workspace and task status payloads", () => {
     expect(projectCreateSchema.safeParse({ workspaceId: "ws_main", name: "Website refresh" }).success).toBe(true);
     expect(taskStatusSchema.safeParse({ status: "in_review" }).success).toBe(true);

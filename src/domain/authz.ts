@@ -313,6 +313,7 @@ export type NavKey =
   | "tasks"
   | "my-work"
   | "reports"
+  | "calendar"
   | "notifications"
   | "people"
   | "analytics"
@@ -333,15 +334,16 @@ export const RELEASED_NAV: ReadonlySet<NavKey> = new Set<NavKey>([
   "projects",
   "tasks",
   "reports",
+  "calendar",
   "crm",
   "automation",
   "analytics",
 ]);
 
 const NAV_BY_ROLE: Record<Role, readonly NavKey[]> = {
-  admin: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "automation", "notifications", "people", "analytics", "activity", "settings"],
-  lead: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "notifications", "people", "analytics", "activity", "settings"],
-  member: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "crm", "analytics", "notifications", "people", "activity", "settings"],
+  admin: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "calendar", "crm", "automation", "notifications", "people", "analytics", "activity", "settings"],
+  lead: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "calendar", "crm", "notifications", "people", "analytics", "activity", "settings"],
+  member: ["overview", "workspaces", "structure", "projects", "tasks", "my-work", "reports", "calendar", "crm", "analytics", "notifications", "people", "activity", "settings"],
 };
 
 export function navFor(actor: Actor, released: ReadonlySet<NavKey> = RELEASED_NAV): NavKey[] {

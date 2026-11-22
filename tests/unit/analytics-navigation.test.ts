@@ -8,7 +8,7 @@ function actor(role: Actor["role"]): Actor {
   };
 }
 
-describe("Module 4 Analytics navigation", () => {
+describe("Module 7 Analytics navigation", () => {
   it("exposes scoped analytics to Admin, Lead and Team Member", () => {
     for (const role of ["admin", "lead", "member"] as const) {
       expect(navFor(actor(role))).toContain("analytics");
